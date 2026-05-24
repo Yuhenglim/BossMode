@@ -64,37 +64,39 @@
 
 <script>
     async function loadCharacters() {
-        const res = await fetch("/api/characters");
-        const data = await res.json();
-        const grid = document.getElementById("character-grid");
-        const empty = document.getElementById("empty-state");
+    const res = await fetch("/api/characters");
+    const data = await res.json();
+    const grid = document.getElementById("character-grid");
 
-        if (data.characters.length === 0) {
-            empty.style.display = "block";
-            return;
-        }
-
-        empty.style.display = "none";
-        grid.innerHTML = "";
-
-        data.characters.forEach(c => {
-            const card = document.createElement("div");
-            card.className = "card";
-            card.onclick = () => window.location.href = `/characters/${encodeURIComponent(c.name)}`;
-
-            const avatarContent = c.picture
-                ? `<img src="${c.picture}" alt="${c.name}">`
-                : `🎭`;
-
-            card.innerHTML = `
-                <div class="card-avatar">${avatarContent}</div>
-                <div class="card-role">${c.role}</div>
-                <div class="card-name">${c.name}</div>
-                <div class="card-meta">${c.personality.slice(0, 72)}${c.personality.length > 72 ? "…" : ""}</div>
-            `;
-            grid.appendChild(card);
-        });
+    if (data.characters.length === 0) {
+        grid.innerHTML = `
+            <div class="empty-state" id="empty-state">
+                <div class="icon">🎭</div>
+                <p>No characters yet. Create one to get started.</p>
+            </div>`;
+        return;
     }
+
+    grid.innerHTML = "";
+
+    data.characters.forEach(c => {
+        const card = document.createElement("div");
+        card.className = "card";
+        card.onclick = () => window.location.href = `/characters/${encodeURIComponent(c.name)}`;
+
+        const avatarContent = c.picture
+            ? `<img src="${c.picture}" alt="${c.name}">`
+            : `🎭`;
+
+        card.innerHTML = `
+            <div class="card-avatar">${avatarContent}</div>
+            <div class="card-role">${c.role}</div>
+            <div class="card-name">${c.name}</div>
+            <div class="card-meta">${c.personality.slice(0, 72)}${c.personality.length > 72 ? "…" : ""}</div>
+        `;
+        grid.appendChild(card);
+    });
+}
 
     async function createCharacter() {
         const name        = document.getElementById("input-name").value.trim();
