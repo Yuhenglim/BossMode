@@ -270,5 +270,48 @@ def character_profile(character_id):
     return render_template("profile.html", character=character, tasks=tasks,
                            user=current_user, total=total, completed=completed, pending=pending)
 
+@app.route("/dashboard")
+@login_required
+def dashboard():
+    characters = Character.query.filter_by(user_id=current_user.id).all()
+    all_tasks  = Task.query.join(Character).filter(Character.user_id == current_user.id).all()
+    all_messages = Message.query.join(Task).join(Character).filter(
+        Character.user_id == current_user.id
+    ).all()
+
+    total     = len(all_tasks)
+    completed = sum(1 for t in all_tasks if t.is_complete)
+    pending   = total - completed
+    rate      = round((completed / total * 100) if total > 0 else 0)
+
+    # Upcoming deadlines (incomplete, sorted by deadline)
+    from datetime import date
+    today    = date.today()
+    upcoming = sorted(
+        [t for t in all_tasks if not t.is_complete],
+        key=lambda t: t.deadline
+    )[:5]
+
+    # Most active character (most messages)
+    char_msg_counts = {}
+    for t in all_tasks:
+        char_msg_counts[t.character_id] = char_msg_counts.get(t.character_id, 0) + len(t.messages)
+    most_active = None
+    if char_msg_counts:
+        top_id   = max(char_msg_counts, key=char_msg_counts.get)
+        most_active = Character.query.get(top_id)
+
+    return render_template("dashboard.html",
+        user=current_user,
+        characters=characters,
+        total=total,
+        completed=completed,
+        pending=pending,
+        rate=rate,
+        upcoming=upcoming,
+        most_active=most_active,
+        today=today
+    )
+
 if __name__ == "__main__":
     app.run(debug=False)

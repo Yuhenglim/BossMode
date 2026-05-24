@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard — BossMode</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="page">
+    <div class="page-header">
+        <div>
+            <div class="brand">
+                <div class="brand-dot"></div>
+                <span class="brand-name">BossMode</span>
+            </div>
+            <div class="page-subtitle">Your productivity overview</div>
+        </div>
+        <div style="display:flex; gap:10px;">
+            <a href="/" class="btn btn-ghost">💬 Chats</a>
+            <a href="/logout" class="btn btn-ghost">Log out</a>
+        </div>
+    </div>
+
+    <!-- Welcome -->
+    <div style="margin-bottom:32px;">
+        <div style="font-family:'Lora',serif; font-size:1.5rem; font-weight:600;">
+            Hey, {{ user.name.split()[0] }} 👋
+        </div>
+        <div style="color:var(--text-dim); font-size:0.9rem; margin-top:4px;">
+            Here's how you're doing across all your tasks.
+        </div>
+    </div>
+
+    <!-- Stats row -->
+    <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:32px;">
+        <div class="stat-card">
+            <div class="stat-value" style="color:var(--text);">{{ total }}</div>
+            <div class="stat-label">Total Tasks</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" style="color:var(--success);">{{ completed }}</div>
+            <div class="stat-label">Completed</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" style="color:var(--danger);">{{ pending }}</div>
+            <div class="stat-label">Pending</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" style="color:var(--accent);">{{ rate }}%</div>
+            <div class="stat-label">Completion Rate</div>
+        </div>
+    </div>
+
+    <!-- Progress bar -->
+    {% if total > 0 %}
+    <div style="background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--radius-lg); padding:24px; margin-bottom:32px; box-shadow:var(--shadow-sm);">
+        <div style="display:flex; justify-content:space-between; margin-bottom:12px;">
+            <div style="font-weight:600; font-size:0.9rem;">Overall Progress</div>
+            <div style="font-size:0.85rem; color:var(--text-dim);">{{ completed }}/{{ total }} tasks done</div>
+        </div>
+        <div class="progress-track">
+            <div class="progress-bar" style="width:{{ rate }}%;"></div>
+        </div>
+        <div style="font-size:0.78rem; color:var(--text-dim); margin-top:8px;">
+            {% if rate == 100 %}
+                🎉 All tasks complete!
+            {% elif rate >= 75 %}
+                Almost there — keep going!
+            {% elif rate >= 50 %}
+                Good progress — more than halfway!
+            {% elif rate > 0 %}
+                Just getting started — stay consistent!
+            {% else %}
+                No tasks completed yet. Time to get moving!
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-bottom:32px;">
+
+        <!-- Upcoming deadlines -->
+        <div style="background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--radius-lg); padding:24px; box-shadow:var(--shadow-sm);">
+            <div style="font-family:'Lora',serif; font-size:1rem; font-weight:600; margin-bottom:16px;">
+                🗓️ Upcoming Deadlines
+            </div>
+            {% if upcoming %}
+                <div style="display:flex; flex-direction:column; gap:10px;">
+                {% for task in upcoming %}
+                    {% set days = (task.deadline | string | replace('-','') | int - today.strftime('%Y%m%d') | int) %}
+                    <div style="display:flex; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid var(--border-soft);">
+                        <div style="flex:1; min-width:0;">
+                            <div style="font-weight:600; font-size:0.88rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                                {{ task.name }}
+                            </div>
+                            <div style="font-size:0.75rem; color:var(--text-dim); margin-top:2px;">
+                                {{ task.character.name }} · Due {{ task.deadline }}
+                            </div>
+                        </div>
+                        {% if task.deadline <= today.strftime('%Y-%m-%d') %}
+                            <span class="task-badge badge-urgent">Overdue</span>
+                        {% elif task.deadline <= (today.strftime('%Y-%m-%d')) %}
+                            <span class="task-badge badge-urgent">Today</span>
+                        {% else %}
+                            <span class="task-badge badge-pending">{{ task.deadline }}</span>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state" style="padding:20px;">
+                    <div class="icon" style="font-size:1.8rem;">✅</div>
+                    <p>No pending tasks!</p>
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- Characters overview -->
+        <div style="background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--radius-lg); padding:24px; box-shadow:var(--shadow-sm);">
+            <div style="font-family:'Lora',serif; font-size:1rem; font-weight:600; margin-bottom:16px;">
+                👥 Your Characters
+            </div>
+            {% if characters %}
+                <div style="display:flex; flex-direction:column; gap:10px;">
+                {% for char in characters %}
+                    <a href="/characters/{{ char.id }}" style="display:flex; align-items:center; gap:12px; padding:10px; border-radius:var(--radius-md); transition:background 0.15s;" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">
+                        <div class="card-avatar" style="width:38px; height:38px; font-size:0.9rem; flex-shrink:0;">
+                            {% if char.picture %}
+                                <img src="{{ char.picture }}" alt="{{ char.name }}">
+                            {% else %}
+                                {{ char.name[0].upper() }}
+                            {% endif %}
+                        </div>
+                        <div style="flex:1; min-width:0;">
+                            <div style="font-weight:600; font-size:0.88rem;">{{ char.name }}</div>
+                            <div style="font-size:0.75rem; color:var(--accent);">{{ char.role }}</div>
+                        </div>
+                        <div style="font-size:0.78rem; color:var(--text-dim);">
+                            {{ char.tasks|length }} task{{ 's' if char.tasks|length != 1 }}
+                        </div>
+                    </a>
+                {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state" style="padding:20px;">
+                    <div class="icon" style="font-size:1.8rem;">🎭</div>
+                    <p>No characters yet.</p>
+                </div>
+            {% endif %}
+        </div>
+
+    </div>
+
+    <!-- Most active character -->
+    {% if most_active %}
+    <div style="background:var(--accent-dim); border:1px solid var(--accent); border-radius:var(--radius-lg); padding:24px; display:flex; align-items:center; gap:20px;">
+        <div class="card-avatar" style="width:56px; height:56px; font-size:1.3rem; flex-shrink:0;">
+            {% if most_active.picture %}
+                <img src="{{ most_active.picture }}" alt="{{ most_active.name }}">
+            {% else %}
+                {{ most_active.name[0].upper() }}
+            {% endif %}
+        </div>
+        <div>
+            <div style="font-size:0.75rem; color:var(--accent); font-weight:600; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">
+                Most Active Character
+            </div>
+            <div style="font-family:'Lora',serif; font-size:1.1rem; font-weight:600;">{{ most_active.name }}</div>
+            <div style="font-size:0.82rem; color:var(--text-mid); margin-top:2px;">{{ most_active.role }}</div>
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+
+</body>
+</html>
