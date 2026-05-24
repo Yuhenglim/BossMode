@@ -9,7 +9,8 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db.init_app(app)
 
-
+from dotenv import load_dotenv
+load_dotenv()
 
 # scheduler config
 app.config["SCHEDULER_API_ENABLED"] = False
