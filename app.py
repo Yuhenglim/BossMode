@@ -1,28 +1,36 @@
-from flask import Flask, render_template, request, jsonify
-from models import db, Character, Task, Message
-from ai_service import generate_message
+from dotenv import load_dotenv
+load_dotenv()
+
+from flask import Flask, render_template, request, jsonify, redirect, url_for
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
+from models import db, User, Character, Task, Message
+from ai_service import generate_message, generate_reply
 from scheduler import scheduler, run_scheduler
 import os
 
 app = Flask(__name__)
-
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-key")
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 database_url = os.environ.get("DATABASE_URL", "sqlite:///bossmode.db")
-
-# Railway gives postgres:// but SQLAlchemy needs postgresql://
 if database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql://", 1)
-
 app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 
 db.init_app(app)
 
-from dotenv import load_dotenv
-load_dotenv()
+# Flask-Login
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = "login"
 
-# scheduler config
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+# Scheduler
 app.config["SCHEDULER_API_ENABLED"] = False
-
 scheduler.init_app(app)
 
 @scheduler.task("interval", id="auto_message", minutes=15, misfire_grace_time=60)
@@ -35,43 +43,84 @@ with app.app_context():
     db.create_all()
 
 
-# --- Character routes ---
-@app.route("/")
-def index():
-    return render_template("index.html")
+# ── Auth routes ───────────────────────────────────────────────
+@app.route("/signup", methods=["GET", "POST"])
+def signup():
+    if request.method == "POST":
+        data = request.json
+        if User.query.filter_by(email=data["email"]).first():
+            return jsonify({"error": "Email already registered"}), 409
 
+        user = User(
+            email=data["email"],
+            password=generate_password_hash(data["password"]),
+            name=data["name"]
+        )
+        db.session.add(user)
+        db.session.commit()
+        login_user(user)
+        return jsonify({"message": "Account created"}), 201
+
+    return render_template("auth.html", mode="signup")
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        data = request.json
+        user = User.query.filter_by(email=data["email"]).first()
+        if not user or not check_password_hash(user.password, data["password"]):
+            return jsonify({"error": "Invalid email or password"}), 401
+
+        login_user(user)
+        return jsonify({"message": "Logged in"}), 200
+
+    return render_template("auth.html", mode="login")
+
+@app.route("/logout")
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for("login"))
+
+
+# ── Main page ─────────────────────────────────────────────────
+@app.route("/")
+@login_required
+def index():
+    return render_template("index.html", user=current_user)
+
+
+# ── Character routes ──────────────────────────────────────────
 @app.route("/api/characters", methods=["POST"])
+@login_required
 def create_character():
     data = request.json
     if not data or not all(k in data for k in ["name", "role", "personality"]):
         return jsonify({"error": "name, role, and personality are required"}), 400
 
-    if Character.query.filter_by(name=data["name"]).first():
-        return jsonify({"error": f"Character '{data['name']}' already exists"}), 409
-
     character = Character(
         name=data["name"],
         role=data["role"],
         picture=data.get("picture", ""),
-        personality=data["personality"]
+        personality=data["personality"],
+        user_id=current_user.id
     )
     db.session.add(character)
     db.session.commit()
-    return jsonify({"message": f"Character {character.name} created"}), 201
+    return jsonify(character.to_dict()), 201
 
 @app.route("/api/characters", methods=["GET"])
+@login_required
 def get_characters():
-    characters = Character.query.all()
+    characters = Character.query.filter_by(user_id=current_user.id).all()
     return jsonify({"characters": [c.to_dict() for c in characters]})
 
 
-# --- Task routes ---
-@app.route("/characters/<name>/tasks", methods=["POST"])
-def add_task(name):
-    character = Character.query.filter(
-        Character.name.ilike(name)
-    ).first_or_404(description=f"Character '{name}' not found")
-
+# ── Task routes ───────────────────────────────────────────────
+@app.route("/api/characters/<int:character_id>/tasks", methods=["POST"])
+@login_required
+def add_task(character_id):
+    character = Character.query.filter_by(id=character_id, user_id=current_user.id).first_or_404()
     data = request.json
     if not data or not all(k in data for k in ["name", "description", "deadline"]):
         return jsonify({"error": "name, description, and deadline are required"}), 400
@@ -80,74 +129,83 @@ def add_task(name):
         name=data["name"],
         description=data["description"],
         deadline=data["deadline"],
-        messages_per_day=data.get("messages_per_day", 3),  # ← new, defaults to 3
+        messages_per_day=data.get("messages_per_day", 3),
         character_id=character.id
     )
     db.session.add(task)
     db.session.commit()
-    return jsonify({"message": f"Task '{task.name}' added to {name}"}), 201
+    return jsonify(task.to_dict()), 201
 
-@app.route("/characters/<name>/tasks", methods=["GET"])
-def get_tasks(name):
-    character = Character.query.filter_by(name=name).first_or_404(
-        description=f"Character '{name}' not found"
-    )
+@app.route("/api/characters/<int:character_id>/tasks", methods=["GET"])
+@login_required
+def get_tasks(character_id):
+    character = Character.query.filter_by(id=character_id, user_id=current_user.id).first_or_404()
     return jsonify({"tasks": [t.to_dict() for t in character.tasks]})
 
-@app.route("/characters/<name>/tasks/<task_name>/complete", methods=["PATCH"])
-def complete_task(name, task_name):
-    character = Character.query.filter_by(name=name).first_or_404(
-        description=f"Character '{name}' not found"
-    )
-    task = Task.query.filter_by(name=task_name, character_id=character.id).first_or_404(
-        description=f"Task '{task_name}' not found"
-    )
+@app.route("/api/tasks/<int:task_id>/complete", methods=["PATCH"])
+@login_required
+def complete_task(task_id):
+    task = Task.query.join(Character).filter(
+        Task.id == task_id,
+        Character.user_id == current_user.id
+    ).first_or_404()
     task.is_complete = True
     db.session.commit()
-    return jsonify({"message": f"'{task_name}' marked complete"})
+    return jsonify({"message": "Task marked complete"})
 
 
-# --- Message routes ---
-@app.route("/characters/<name>/tasks/<task_name>/message", methods=["GET"])
-def get_message(name, task_name):
-    character = Character.query.filter_by(name=name).first_or_404(
-        description=f"Character '{name}' not found"
-    )
-    task = Task.query.filter_by(name=task_name, character_id=character.id).first_or_404(
-        description=f"Task '{task_name}' not found"
-    )
-    content = generate_message(character, task)
-    message = Message(content=content, task_id=task.id)
+# ── Message routes ────────────────────────────────────────────
+@app.route("/api/tasks/<int:task_id>/message", methods=["GET"])
+@login_required
+def get_message(task_id):
+    task = Task.query.join(Character).filter(
+        Task.id == task_id,
+        Character.user_id == current_user.id
+    ).first_or_404()
+
+    content = generate_message(task.character, task)
+    message = Message(content=content, task_id=task.id, is_user=False)
     db.session.add(message)
     db.session.commit()
-    return jsonify({"message": content})
+    return jsonify(message.to_dict())
 
-@app.route("/characters/<name>/tasks/<task_name>/history", methods=["GET"])
-def get_message_history(name, task_name):
-    character = Character.query.filter_by(name=name).first_or_404(
-        description=f"Character '{name}' not found"
-    )
-    task = Task.query.filter_by(name=task_name, character_id=character.id).first_or_404(
-        description=f"Task '{task_name}' not found"
-    )
+@app.route("/api/tasks/<int:task_id>/reply", methods=["POST"])
+@login_required
+def user_reply(task_id):
+    task = Task.query.join(Character).filter(
+        Task.id == task_id,
+        Character.user_id == current_user.id
+    ).first_or_404()
+
+    data = request.json
+    user_text = data.get("message", "").strip()
+    if not user_text:
+        return jsonify({"error": "Message is empty"}), 400
+
+    # Save user message
+    user_msg = Message(content=user_text, task_id=task.id, is_user=True)
+    db.session.add(user_msg)
+    db.session.commit()
+
+    # Generate character reply
+    reply_content = generate_reply(task.character, task, user_text)
+    reply_msg = Message(content=reply_content, task_id=task.id, is_user=False)
+    db.session.add(reply_msg)
+    db.session.commit()
+
+    return jsonify({
+        "user_message": user_msg.to_dict(),
+        "reply": reply_msg.to_dict()
+    })
+
+@app.route("/api/tasks/<int:task_id>/history", methods=["GET"])
+@login_required
+def get_history(task_id):
+    task = Task.query.join(Character).filter(
+        Task.id == task_id,
+        Character.user_id == current_user.id
+    ).first_or_404()
     return jsonify({"history": [m.to_dict() for m in task.messages]})
-
-
-@app.route("/characters/<name>/tasks/<task_name>/chat")
-def chat(name, task_name):
-    character = Character.query.filter(
-        Character.name.ilike(name)
-    ).first_or_404()
-    task = Task.query.filter(
-        Task.name.ilike(task_name),
-        Task.character_id == character.id
-    ).first_or_404()
-    return render_template("chat.html", character=character, task=task)
-
-@app.route("/characters/<name>")
-def character_page(name):
-    character = Character.query.filter_by(name=name).first_or_404()
-    return render_template("tasks.html", character=character)
 
 
 if __name__ == "__main__":

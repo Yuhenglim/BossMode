@@ -47,3 +47,32 @@ def generate_message(character, task):
     )
 
     return response.content[0].text
+
+def generate_reply(character, task, user_message):
+    prompt = f"""
+    You are {character.name}, a {character.role}.
+    Your personality is: {character.personality}.
+
+    You are managing this task for your employee:
+    - Task: {task.name}
+    - Description: {task.description}
+    - Deadline: {task.deadline}
+    - Completed: {task.is_complete}
+
+    Your employee just sent you this message: "{user_message}"
+
+    Rules:
+    - If they say they finished or completed the task, acknowledge it positively but stay in character.
+    - If they say they are working on it or making progress, encourage them and stay in character.
+    - If they say they are struggling or need help, show appropriate concern and stay in character.
+    - If the message is completely irrelevant to the task, respond with a single dismissive in-character line and redirect them back to the task.
+    - Never break character. Keep your reply to 1-3 sentences.
+    """
+
+    response = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=1024,
+        messages=[{"role": "user", "content": prompt}]
+    )
+
+    return response.content[0].text

@@ -6,134 +6,603 @@
     <title>BossMode</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>
+<body class="app-body">
 
-<div class="page">
-    <div class="page-header">
-        <div>
+<div class="app-layout">
+
+    <!-- ── Sidebar ─────────────────────────────────────────── -->
+    <div class="sidebar">
+
+        <div class="sidebar-header">
             <div class="brand">
                 <div class="brand-dot"></div>
                 <span class="brand-name">BossMode</span>
             </div>
-            <div class="page-subtitle">Your accountability characters</div>
+            <a href="/logout" class="btn btn-ghost" style="font-size:0.8rem; padding:6px 12px;">
+                Log out
+            </a>
         </div>
-        <button class="btn btn-primary" onclick="openModal()">+ New Character</button>
+
+        <div class="sidebar-actions">
+            <button class="action-box" onclick="openPanel('character')">
+                <div class="action-icon">👤</div>
+                <div class="action-label">New Character</div>
+            </button>
+            <button class="action-box" onclick="openPanel('task')">
+                <div class="action-icon">📋</div>
+                <div class="action-label">New Task</div>
+            </button>
+        </div>
+
+        <div class="sidebar-divider"></div>
+
+        <div class="chat-list" id="chat-list">
+            <!-- Example placeholder -->
+            <div class="chat-row example-row" id="example-row">
+                <div class="chat-avatar example-avatar">🎭</div>
+                <div class="chat-info">
+                    <div class="chat-name" style="color:var(--text-dim);">Karina <span class="example-badge">example</span></div>
+                    <div class="chat-preview">Create a character to get started...</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="sidebar-footer">
+            <div class="user-pill">
+                <div class="user-avatar">{{ user.name[0].upper() }}</div>
+                <div class="user-info">
+                    <div class="user-name">{{ user.name }}</div>
+                    <div class="user-email">{{ user.email }}</div>
+                </div>
+            </div>
+        </div>
+
     </div>
 
-    <div class="card-grid" id="character-grid">
-        <div class="empty-state" id="empty-state">
-            <div class="icon">🎭</div>
-            <p>No characters yet. Create one to start getting pushed.</p>
+    <!-- ── Main area ───────────────────────────────────────── -->
+    <div class="main-area">
+
+        <!-- Empty state -->
+        <div class="main-empty" id="main-empty">
+            <div class="main-empty-icon">💬</div>
+            <div class="main-empty-title">Select a character to start chatting</div>
+            <div class="main-empty-sub">Or create a new one using the sidebar</div>
         </div>
+
+        <!-- Chat view (hidden until character selected) -->
+        <div class="chat-view" id="chat-view" style="display:none;">
+
+            <div class="chat-view-header" id="chat-view-header">
+                <!-- filled dynamically -->
+            </div>
+
+            <div class="task-tabs" id="task-tabs">
+                <!-- task tabs filled dynamically -->
+            </div>
+
+            <div class="chat-messages" id="chat-messages">
+                <div class="empty-state" id="msg-empty">
+                    <div class="icon">💬</div>
+                    <p>No messages yet. Get one below.</p>
+                </div>
+            </div>
+
+            <div class="chat-input-area" id="chat-input-area">
+                <input type="text" id="user-input" class="chat-input"
+                    placeholder="Reply to your boss..."
+                    onkeydown="if(event.key==='Enter') sendReply()">
+                <button class="btn btn-primary" onclick="sendReply()">Send</button>
+                <button class="btn btn-ghost" onclick="getAutoMessage()" id="auto-btn">
+                    📩 Prompt
+                </button>
+            </div>
+
+        </div>
+
     </div>
+
+    <!-- ── Right panel (slides in) ────────────────────────── -->
+    <div class="panel-backdrop" id="panel-backdrop" onclick="closePanel()"></div>
+
+    <div class="side-panel" id="side-panel">
+
+        <!-- Character creation panel -->
+        <div id="panel-character" style="display:none;">
+            <div class="panel-header">
+                <div class="panel-title">New Character</div>
+                <button class="panel-close" onclick="closePanel()">✕</button>
+            </div>
+            <div class="panel-body">
+                <div class="form-group">
+                    <label>Name</label>
+                    <input type="text" id="c-name" placeholder="e.g. Mr. Tan">
+                </div>
+                <div class="form-group">
+                    <label>Role</label>
+                    <input type="text" id="c-role" placeholder="e.g. Boss, Lecturer, Parent">
+                </div>
+                <div class="form-group">
+                    <label>Personality</label>
+                    <textarea id="c-personality" rows="4"
+                        placeholder="e.g. Extremely demanding, no patience for excuses, speaks in short sharp sentences"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Picture URL (optional)</label>
+                    <input type="text" id="c-picture"
+                        placeholder="https://api.dicebear.com/7.x/avataaars/svg?seed=name">
+                </div>
+                <button class="btn btn-primary" style="width:100%;" onclick="createCharacter()">
+                    Create Character
+                </button>
+            </div>
+        </div>
+
+        <!-- Task creation panel -->
+        <div id="panel-task" style="display:none;">
+            <div class="panel-header">
+                <div class="panel-title">New Task</div>
+                <button class="panel-close" onclick="closePanel()">✕</button>
+            </div>
+            <div class="panel-body">
+                <div class="form-group">
+                    <label>Assign to</label>
+                    <div class="character-selector" id="character-selector">
+                        <!-- filled dynamically -->
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Task Name</label>
+                    <input type="text" id="t-name" placeholder="e.g. Finish assignment">
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea id="t-description" rows="3"
+                        placeholder="e.g. Complete chapters 3 and 4 and submit on the portal"></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Deadline</label>
+                        <input type="date" id="t-deadline">
+                    </div>
+                    <div class="form-group">
+                        <label>Messages/day</label>
+                        <select id="t-mpd">
+                            <option value="1">1 — light</option>
+                            <option value="2">2 — moderate</option>
+                            <option value="3" selected>3 — default</option>
+                            <option value="4">4 — persistent</option>
+                            <option value="6">6 — relentless</option>
+                        </select>
+                    </div>
+                </div>
+                <button class="btn btn-primary" style="width:100%;" onclick="createTask()">
+                    Add Task
+                </button>
+            </div>
+        </div>
+
+    </div>
+
 </div>
 
-<!-- Modal -->
-<div class="modal-backdrop" id="modal-backdrop" onclick="closeOnBackdrop(event)">
-    <div class="modal">
-        <div class="modal-title">New Character</div>
-
-        <div class="form-group">
-            <label>Name</label>
-            <input type="text" id="input-name" placeholder="e.g. Mr. Tan">
-        </div>
-
-        <div class="form-row">
-            <div class="form-group">
-                <label>Role</label>
-                <input type="text" id="input-role" placeholder="e.g. Boss">
-            </div>
-            <div class="form-group">
-                <label>Picture URL (optional)</label>
-                <input type="text" id="input-picture" placeholder="https://...">
-            </div>
-        </div>
-
-        <div class="form-group">
-            <label>Personality</label>
-            <textarea id="input-personality" rows="3"
-                placeholder="e.g. Extremely demanding, no patience for excuses, speaks in short sharp sentences"></textarea>
-        </div>
-
-        <div class="modal-actions">
-            <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-            <button class="btn btn-primary" onclick="createCharacter()">Create</button>
-        </div>
-    </div>
+<!-- Notification -->
+<div class="notification" id="notification">
+    <div class="notification-name" id="notification-name"></div>
+    <div class="notification-text" id="notification-text"></div>
 </div>
 
 <script>
-    async function loadCharacters() {
-    const res = await fetch("/api/characters");
-    const data = await res.json();
-    const grid = document.getElementById("character-grid");
+// ── State ──────────────────────────────────────────────────────
+let characters   = [];
+let activeCharId = null;
+let activeTaskId = null;
+let lastMsgCount = 0;
 
-    if (data.characters.length === 0) {
-        grid.innerHTML = `
-            <div class="empty-state" id="empty-state">
-                <div class="icon">🎭</div>
-                <p>No characters yet. Create one to get started.</p>
-            </div>`;
+// ── Init ───────────────────────────────────────────────────────
+loadCharacters();
+setInterval(poll, 30000);
+
+// ── Load characters ────────────────────────────────────────────
+async function loadCharacters() {
+    const res  = await fetch("/api/characters");
+    const data = await res.json();
+    characters = data.characters;
+    renderChatList();
+}
+
+function renderChatList() {
+    const list    = document.getElementById("chat-list");
+    const example = document.getElementById("example-row");
+
+    // Remove old character rows
+    list.querySelectorAll(".chat-row:not(.example-row)").forEach(r => r.remove());
+
+    if (characters.length === 0) {
+        example.style.display = "flex";
         return;
     }
 
-    grid.innerHTML = "";
+    example.style.display = "none";
 
-    data.characters.forEach(c => {
-        const card = document.createElement("div");
-        card.className = "card";
-        card.onclick = () => window.location.href = `/characters/${encodeURIComponent(c.name)}`;
+    characters.forEach(c => {
+        const row = document.createElement("div");
+        row.className = "chat-row";
+        row.id = `chat-row-${c.id}`;
+        row.onclick = () => selectCharacter(c.id);
 
         const avatarContent = c.picture
             ? `<img src="${c.picture}" alt="${c.name}">`
-            : `🎭`;
+            : c.name[0].toUpperCase();
 
-        card.innerHTML = `
-            <div class="card-avatar">${avatarContent}</div>
-            <div class="card-role">${c.role}</div>
-            <div class="card-name">${c.name}</div>
-            <div class="card-meta">${c.personality.slice(0, 72)}${c.personality.length > 72 ? "…" : ""}</div>
+        row.innerHTML = `
+            <div class="chat-avatar">${avatarContent}</div>
+            <div class="chat-info">
+                <div class="chat-name">${c.name}</div>
+                <div class="chat-preview chat-role">${c.role}</div>
+            </div>
         `;
-        grid.appendChild(card);
+        list.appendChild(row);
     });
 }
 
-    async function createCharacter() {
-        const name        = document.getElementById("input-name").value.trim();
-        const role        = document.getElementById("input-role").value.trim();
-        const picture     = document.getElementById("input-picture").value.trim();
-        const personality = document.getElementById("input-personality").value.trim();
+// ── Select character ───────────────────────────────────────────
+async function selectCharacter(charId) {
+    activeCharId = charId;
+    activeTaskId = null;
 
-        if (!name || !role || !personality) {
-            alert("Name, role, and personality are required.");
-            return;
+    // Highlight active row
+    document.querySelectorAll(".chat-row").forEach(r => r.classList.remove("active"));
+    const row = document.getElementById(`chat-row-${charId}`);
+    if (row) row.classList.add("active");
+
+    // Show chat view
+    document.getElementById("main-empty").style.display = "none";
+    document.getElementById("chat-view").style.display  = "flex";
+
+    const char = characters.find(c => c.id === charId);
+
+    // Render header
+    const avatarContent = char.picture
+        ? `<img src="${char.picture}" alt="${char.name}">`
+        : char.name[0].toUpperCase();
+
+    document.getElementById("chat-view-header").innerHTML = `
+        <div class="chat-avatar" style="width:40px;height:40px;font-size:1rem;">${avatarContent}</div>
+        <div class="chat-header-info">
+            <div class="chat-header-name">${char.name}</div>
+            <div class="chat-header-task">${char.role}</div>
+        </div>
+    `;
+
+    // Load tasks
+    const res  = await fetch(`/api/characters/${charId}/tasks`);
+    const data = await res.json();
+    renderTaskTabs(data.tasks);
+
+    // Select first incomplete task
+    const firstTask = data.tasks.find(t => !t.is_complete) || data.tasks[0];
+    if (firstTask) selectTask(firstTask.id);
+    else clearMessages();
+}
+
+// ── Task tabs ──────────────────────────────────────────────────
+function renderTaskTabs(tasks) {
+    const tabs = document.getElementById("task-tabs");
+    tabs.innerHTML = "";
+
+    if (tasks.length === 0) {
+        tabs.innerHTML = `<div style="padding:10px 16px; font-size:0.8rem; color:var(--text-dim);">
+            No tasks yet — add one from the sidebar.</div>`;
+        return;
+    }
+
+    tasks.forEach(t => {
+        const tab = document.createElement("button");
+        tab.className = `task-tab${t.is_complete ? " task-tab-done" : ""}`;
+        tab.id = `tab-${t.id}`;
+        tab.onclick = () => selectTask(t.id);
+        tab.textContent = t.name;
+        tabs.appendChild(tab);
+    });
+}
+
+// ── Select task ────────────────────────────────────────────────
+async function selectTask(taskId) {
+    activeTaskId = taskId;
+    lastMsgCount = 0;
+
+    // Highlight tab
+    document.querySelectorAll(".task-tab").forEach(t => t.classList.remove("active"));
+    const tab = document.getElementById(`tab-${taskId}`);
+    if (tab) tab.classList.add("active");
+
+    // Load history
+    await loadHistory();
+
+    // Update input area
+    const task = findTask(taskId);
+    const inputArea = document.getElementById("chat-input-area");
+    if (task && task.is_complete) {
+        inputArea.innerHTML = `
+            <div style="width:100%; text-align:center; color:var(--text-dim); font-size:0.85rem; padding:8px;">
+                Task complete — no more messages.
+            </div>`;
+    } else {
+        inputArea.innerHTML = `
+            <input type="text" id="user-input" class="chat-input"
+                placeholder="Reply to your boss..."
+                onkeydown="if(event.key==='Enter') sendReply()">
+            <button class="btn btn-success btn-sm" onclick="markDone()">✓ Done</button>
+            <button class="btn btn-primary btn-sm" onclick="sendReply()">Send</button>
+            <button class="btn btn-ghost btn-sm" onclick="getAutoMessage()" id="auto-btn">📩 Prompt</button>
+        `;
+    }
+}
+
+function findTask(taskId) {
+    // Search through all characters' tasks
+    return window._allTasks ? window._allTasks.find(t => t.id === taskId) : null;
+}
+
+// ── Load history ───────────────────────────────────────────────
+async function loadHistory() {
+    if (!activeTaskId) return;
+    const res  = await fetch(`/api/tasks/${activeTaskId}/history`);
+    const data = await res.json();
+
+    const container = document.getElementById("chat-messages");
+    container.innerHTML = "";
+
+    if (data.history.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="icon">💬</div>
+                <p>No messages yet. Hit Prompt to get your first one.</p>
+            </div>`;
+        lastMsgCount = 0;
+        return;
+    }
+
+    const char = characters.find(c => c.id === activeCharId);
+    data.history.forEach(m => renderMessage(m, char));
+    lastMsgCount = data.history.length;
+    container.scrollTop = container.scrollHeight;
+}
+
+// ── Render message ─────────────────────────────────────────────
+function renderMessage(msg, char) {
+    const container = document.getElementById("chat-messages");
+
+    // Remove empty state if present
+    const empty = container.querySelector(".empty-state");
+    if (empty) empty.remove();
+
+    const isUser = msg.is_user;
+    const time   = new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+    const row = document.createElement("div");
+    row.className = `message-row${isUser ? " message-row-user" : ""}`;
+
+    if (isUser) {
+        row.innerHTML = `
+            <div>
+                <div class="message-bubble message-bubble-user">${msg.content}</div>
+                <div class="message-time" style="text-align:right;">${time}</div>
+            </div>`;
+    } else {
+        const avatarContent = char && char.picture
+            ? `<img src="${char.picture}" alt="${char.name}">`
+            : (char ? char.name[0].toUpperCase() : "?");
+
+        row.innerHTML = `
+            <div class="message-avatar">${avatarContent}</div>
+            <div>
+                <div class="message-bubble">${msg.content}</div>
+                <div class="message-time">${time}</div>
+            </div>`;
+    }
+
+    container.appendChild(row);
+    container.scrollTop = container.scrollHeight;
+}
+
+// ── Get auto message ───────────────────────────────────────────
+async function getAutoMessage() {
+    if (!activeTaskId) return;
+    const btn = document.getElementById("auto-btn");
+    if (btn) { btn.disabled = true; btn.textContent = "Thinking…"; }
+
+    const res  = await fetch(`/api/tasks/${activeTaskId}/message`);
+    const data = await res.json();
+
+    const char = characters.find(c => c.id === activeCharId);
+    renderMessage(data, char);
+    showNotification(char.name, data.content);
+
+    if (btn) { btn.disabled = false; btn.textContent = "📩 Prompt"; }
+}
+
+// ── Send reply ─────────────────────────────────────────────────
+async function sendReply() {
+    if (!activeTaskId) return;
+    const input = document.getElementById("user-input");
+    const text  = input ? input.value.trim() : "";
+    if (!text) return;
+
+    input.value = "";
+    input.disabled = true;
+
+    const char = characters.find(c => c.id === activeCharId);
+
+    const res  = await fetch(`/api/tasks/${activeTaskId}/reply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text })
+    });
+    const data = await res.json();
+
+    renderMessage(data.user_message, char);
+    renderMessage(data.reply, char);
+    showNotification(char.name, data.reply.content);
+
+    input.disabled = false;
+    input.focus();
+}
+
+// ── Mark done ──────────────────────────────────────────────────
+async function markDone() {
+    if (!activeTaskId) return;
+    const res = await fetch(`/api/tasks/${activeTaskId}/complete`, { method: "PATCH" });
+    if (res.ok) {
+        selectCharacter(activeCharId);
+    }
+}
+
+// ── Clear messages ─────────────────────────────────────────────
+function clearMessages() {
+    document.getElementById("chat-messages").innerHTML = `
+        <div class="empty-state">
+            <div class="icon">📋</div>
+            <p>No tasks yet. Add one from the sidebar.</p>
+        </div>`;
+    document.getElementById("task-tabs").innerHTML = "";
+}
+
+// ── Panel ──────────────────────────────────────────────────────
+function openPanel(type) {
+    document.getElementById("panel-character").style.display = type === "character" ? "block" : "none";
+    document.getElementById("panel-task").style.display      = type === "task"      ? "block" : "none";
+
+    if (type === "task") renderCharacterSelector();
+
+    document.getElementById("side-panel").classList.add("open");
+    document.getElementById("panel-backdrop").classList.add("open");
+}
+
+function closePanel() {
+    document.getElementById("side-panel").classList.remove("open");
+    document.getElementById("panel-backdrop").classList.remove("open");
+}
+
+// ── Character selector in task panel ──────────────────────────
+function renderCharacterSelector() {
+    const sel = document.getElementById("character-selector");
+    sel.innerHTML = "";
+    window._selectedCharId = activeCharId || (characters[0] ? characters[0].id : null);
+
+    if (characters.length === 0) {
+        sel.innerHTML = `<div style="color:var(--text-dim); font-size:0.85rem;">
+            No characters yet — create one first.</div>`;
+        return;
+    }
+
+    characters.forEach(c => {
+        const avatarContent = c.picture
+            ? `<img src="${c.picture}" alt="${c.name}">`
+            : c.name[0].toUpperCase();
+
+        const chip = document.createElement("div");
+        chip.className = `char-chip${c.id === window._selectedCharId ? " selected" : ""}`;
+        chip.id = `chip-${c.id}`;
+        chip.onclick = () => {
+            document.querySelectorAll(".char-chip").forEach(ch => ch.classList.remove("selected"));
+            chip.classList.add("selected");
+            window._selectedCharId = c.id;
+        };
+        chip.innerHTML = `
+            <div class="char-chip-avatar">${avatarContent}</div>
+            <div class="char-chip-name">${c.name}</div>
+            <div class="char-chip-role">${c.role}</div>
+        `;
+        sel.appendChild(chip);
+    });
+}
+
+// ── Create character ───────────────────────────────────────────
+async function createCharacter() {
+    const name        = document.getElementById("c-name").value.trim();
+    const role        = document.getElementById("c-role").value.trim();
+    const personality = document.getElementById("c-personality").value.trim();
+    const picture     = document.getElementById("c-picture").value.trim();
+
+    if (!name || !role || !personality) {
+        alert("Name, role, and personality are required."); return;
+    }
+
+    const res = await fetch("/api/characters", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, role, personality, picture })
+    });
+
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || "Something went wrong."); return; }
+
+    ["c-name","c-role","c-personality","c-picture"].forEach(id => document.getElementById(id).value = "");
+    closePanel();
+    await loadCharacters();
+    selectCharacter(data.id);
+}
+
+// ── Create task ────────────────────────────────────────────────
+async function createTask() {
+    const charId      = window._selectedCharId;
+    const name        = document.getElementById("t-name").value.trim();
+    const description = document.getElementById("t-description").value.trim();
+    const deadline    = document.getElementById("t-deadline").value;
+    const mpd         = parseInt(document.getElementById("t-mpd").value);
+
+    if (!charId) { alert("Please select a character."); return; }
+    if (!name || !description || !deadline) { alert("All fields are required."); return; }
+
+    const res = await fetch(`/api/characters/${charId}/tasks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, description, deadline, messages_per_day: mpd })
+    });
+
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || "Something went wrong."); return; }
+
+    ["t-name","t-description","t-deadline"].forEach(id => document.getElementById(id).value = "");
+    document.getElementById("t-mpd").value = "3";
+    closePanel();
+
+    // Refresh character view
+    if (activeCharId === charId) {
+        selectCharacter(charId);
+    } else {
+        selectCharacter(charId);
+    }
+}
+
+// ── Poll for new messages ──────────────────────────────────────
+async function poll() {
+    if (!activeTaskId) return;
+    const res  = await fetch(`/api/tasks/${activeTaskId}/history`);
+    const data = await res.json();
+
+    if (data.history.length > lastMsgCount && lastMsgCount !== 0) {
+        const char   = characters.find(c => c.id === activeCharId);
+        const newest = data.history[data.history.length - 1];
+        if (!newest.is_user) {
+            renderMessage(newest, char);
+            showNotification(char.name, newest.content);
         }
-
-        const res = await fetch("/api/characters", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name, role, picture, personality })
-        });
-
-        const data = await res.json();
-        if (!res.ok) { alert(data.error || "Something went wrong."); return; }
-
-        closeModal();
-        clearForm();
-        loadCharacters();
     }
+    lastMsgCount = data.history.length;
+}
 
-    function openModal()  { document.getElementById("modal-backdrop").classList.add("open"); }
-    function closeModal() { document.getElementById("modal-backdrop").classList.remove("open"); }
-    function closeOnBackdrop(e) {
-        if (e.target === document.getElementById("modal-backdrop")) closeModal();
-    }
-    function clearForm() {
-        ["input-name","input-role","input-picture","input-personality"]
-            .forEach(id => document.getElementById(id).value = "");
-    }
-
-    loadCharacters();
+// ── Notification ───────────────────────────────────────────────
+function showNotification(name, message) {
+    const notif = document.getElementById("notification");
+    document.getElementById("notification-name").textContent = name;
+    document.getElementById("notification-text").textContent =
+        message.length > 90 ? message.slice(0, 90) + "…" : message;
+    notif.classList.add("show");
+    setTimeout(() => notif.classList.remove("show"), 4500);
+}
 </script>
+
 </body>
 </html>
