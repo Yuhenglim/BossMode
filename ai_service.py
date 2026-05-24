@@ -1,5 +1,8 @@
+import anthropic
 from datetime import datetime
-import ollama
+import os
+
+client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
 def check_deadline(task):
     today = datetime.today().date()
@@ -37,9 +40,10 @@ def generate_message(character, task):
     Stay in character based on your personality and the urgency level.
     """
 
-    response = ollama.chat(
-        model="mistral",
+    response = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=1024,
         messages=[{"role": "user", "content": prompt}]
     )
 
-    return response["message"]["content"]
+    return response.content[0].text
