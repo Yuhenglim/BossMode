@@ -2,10 +2,18 @@ from flask import Flask, render_template, request, jsonify
 from models import db, Character, Task, Message
 from ai_service import generate_message
 from scheduler import scheduler, run_scheduler
+import os
 
 app = Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///bossmode.db"
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+
+database_url = os.environ.get("DATABASE_URL", "sqlite:///bossmode.db")
+
+# Railway gives postgres:// but SQLAlchemy needs postgresql://
+if database_url.startswith("postgres://"):
+    database_url = database_url.replace("postgres://", "postgresql://", 1)
+
+app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 
 db.init_app(app)
 
