@@ -208,5 +208,63 @@ def get_history(task_id):
     return jsonify({"history": [m.to_dict() for m in task.messages]})
 
 
+# ── Edit & delete character ───────────────────────────────────
+@app.route("/api/characters/<int:character_id>", methods=["PATCH"])
+@login_required
+def edit_character(character_id):
+    character = Character.query.filter_by(id=character_id, user_id=current_user.id).first_or_404()
+    data = request.json
+    if "name"        in data: character.name        = data["name"]
+    if "role"        in data: character.role        = data["role"]
+    if "personality" in data: character.personality = data["personality"]
+    if "picture"     in data: character.picture     = data["picture"]
+    db.session.commit()
+    return jsonify(character.to_dict())
+
+@app.route("/api/characters/<int:character_id>", methods=["DELETE"])
+@login_required
+def delete_character(character_id):
+    character = Character.query.filter_by(id=character_id, user_id=current_user.id).first_or_404()
+    db.session.delete(character)
+    db.session.commit()
+    return jsonify({"message": "Character deleted"})
+
+
+# ── Edit & delete task ────────────────────────────────────────
+@app.route("/api/tasks/<int:task_id>", methods=["PATCH"])
+@login_required
+def edit_task(task_id):
+    task = Task.query.join(Character).filter(
+        Task.id == task_id,
+        Character.user_id == current_user.id
+    ).first_or_404()
+    data = request.json
+    if "name"             in data: task.name             = data["name"]
+    if "description"      in data: task.description      = data["description"]
+    if "deadline"         in data: task.deadline         = data["deadline"]
+    if "messages_per_day" in data: task.messages_per_day = data["messages_per_day"]
+    db.session.commit()
+    return jsonify(task.to_dict())
+
+@app.route("/api/tasks/<int:task_id>", methods=["DELETE"])
+@login_required
+def delete_task(task_id):
+    task = Task.query.join(Character).filter(
+        Task.id == task_id,
+        Character.user_id == current_user.id
+    ).first_or_404()
+    db.session.delete(task)
+    db.session.commit()
+    return jsonify({"message": "Task deleted"})
+
+
+# ── Character profile page ────────────────────────────────────
+@app.route("/characters/<int:character_id>")
+@login_required
+def character_profile(character_id):
+    character = Character.query.filter_by(id=character_id, user_id=current_user.id).first_or_404()
+    tasks = Task.query.filter_by(character_id=character_id).all()
+    return render_template("profile.html", character=character, tasks=tasks, user=current_user)
+
 if __name__ == "__main__":
     app.run(debug=False)

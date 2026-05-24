@@ -192,11 +192,14 @@
 </div>
 
 <script>
-// ── State ──────────────────────────────────────────────────────
+    // ── State ──────────────────────────────────────────────────────
 let characters   = [];
 let activeCharId = null;
 let activeTaskId = null;
 let lastMsgCount = 0;
+let editingCharId = null;
+let editingTaskId = null;
+window._allTasks  = [];
 
 // ── Init ───────────────────────────────────────────────────────
 loadCharacters();
@@ -214,7 +217,6 @@ function renderChatList() {
     const list    = document.getElementById("chat-list");
     const example = document.getElementById("example-row");
 
-    // Remove old character rows
     list.querySelectorAll(".chat-row:not(.example-row)").forEach(r => r.remove());
 
     if (characters.length === 0) {
@@ -229,6 +231,7 @@ function renderChatList() {
         row.className = "chat-row";
         row.id = `chat-row-${c.id}`;
         row.onclick = () => selectCharacter(c.id);
+        row.oncontextmenu = (e) => { e.preventDefault(); showContextMenu(e, c); };
 
         const avatarContent = c.picture
             ? `<img src="${c.picture}" alt="${c.name}">`
@@ -240,9 +243,106 @@ function renderChatList() {
                 <div class="chat-name">${c.name}</div>
                 <div class="chat-preview chat-role">${c.role}</div>
             </div>
+            <div class="chat-row-actions">
+                <button class="row-action-btn" onclick="event.stopPropagation(); showContextMenu(event, ${JSON.stringify(c).replace(/"/g, '&quot;')})">⋯</button>
+            </div>
         `;
         list.appendChild(row);
     });
+}
+
+// ── Context menu ───────────────────────────────────────────────
+function showContextMenu(e, character) {
+    removeContextMenu();
+    const menu = document.createElement("div");
+    menu.className = "context-menu";
+    menu.id = "context-menu";
+    menu.style.top  = `${e.clientY}px`;
+    menu.style.left = `${e.clientX}px`;
+    menu.innerHTML = `
+        <div class="context-item" onclick="viewProfile(${character.id})">👤 View Profile</div>
+        <div class="context-item" onclick="openEditCharacter(${character.id})">✏️ Edit</div>
+        <div class="context-divider"></div>
+        <div class="context-item context-danger" onclick="confirmDeleteCharacter(${character.id}, '${character.name}')">🗑️ Delete</div>
+    `;
+    document.body.appendChild(menu);
+    setTimeout(() => document.addEventListener("click", removeContextMenu, { once: true }), 10);
+}
+
+function removeContextMenu() {
+    const m = document.getElementById("context-menu");
+    if (m) m.remove();
+}
+
+function viewProfile(charId) {
+    window.location.href = `/characters/${charId}`;
+}
+
+// ── Edit character ─────────────────────────────────────────────
+function openEditCharacter(charId) {
+    removeContextMenu();
+    const char = characters.find(c => c.id === charId);
+    if (!char) return;
+
+    editingCharId = charId;
+
+    document.getElementById("panel-character").style.display  = "block";
+    document.getElementById("panel-task").style.display       = "none";
+    document.getElementById("side-panel").classList.add("open");
+    document.getElementById("panel-backdrop").classList.add("open");
+
+    // Pre-fill form
+    document.getElementById("c-name").value        = char.name;
+    document.getElementById("c-role").value        = char.role;
+    document.getElementById("c-personality").value = char.personality;
+    document.getElementById("c-picture").value     = char.picture || "";
+
+    // Change button text
+    document.querySelector("#panel-character .btn-primary").textContent = "Save Changes";
+    document.querySelector("#panel-character .btn-primary").onclick = saveCharacter;
+    document.querySelector(".panel-title").textContent = "Edit Character";
+}
+
+async function saveCharacter() {
+    const name        = document.getElementById("c-name").value.trim();
+    const role        = document.getElementById("c-role").value.trim();
+    const personality = document.getElementById("c-personality").value.trim();
+    const picture     = document.getElementById("c-picture").value.trim();
+
+    if (!name || !role || !personality) { alert("All fields required."); return; }
+
+    const res = await fetch(`/api/characters/${editingCharId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, role, personality, picture })
+    });
+
+    if (!res.ok) { alert("Something went wrong."); return; }
+
+    editingCharId = null;
+    closePanel();
+    await loadCharacters();
+    selectCharacter(activeCharId);
+}
+
+// ── Delete character ───────────────────────────────────────────
+function confirmDeleteCharacter(charId, name) {
+    removeContextMenu();
+    if (!confirm(`Delete "${name}" and all their tasks? This cannot be undone.`)) return;
+    deleteCharacter(charId);
+}
+
+async function deleteCharacter(charId) {
+    const res = await fetch(`/api/characters/${charId}`, { method: "DELETE" });
+    if (res.ok) {
+        if (activeCharId === charId) {
+            activeCharId = null;
+            activeTaskId = null;
+            document.getElementById("main-empty").style.display = "flex";
+            document.getElementById("chat-view").style.display  = "none";
+        }
+        await loadCharacters();
+    }
 }
 
 // ── Select character ───────────────────────────────────────────
@@ -250,36 +350,35 @@ async function selectCharacter(charId) {
     activeCharId = charId;
     activeTaskId = null;
 
-    // Highlight active row
     document.querySelectorAll(".chat-row").forEach(r => r.classList.remove("active"));
     const row = document.getElementById(`chat-row-${charId}`);
     if (row) row.classList.add("active");
 
-    // Show chat view
     document.getElementById("main-empty").style.display = "none";
     document.getElementById("chat-view").style.display  = "flex";
 
     const char = characters.find(c => c.id === charId);
 
-    // Render header
     const avatarContent = char.picture
         ? `<img src="${char.picture}" alt="${char.name}">`
         : char.name[0].toUpperCase();
 
     document.getElementById("chat-view-header").innerHTML = `
-        <div class="chat-avatar" style="width:40px;height:40px;font-size:1rem;">${avatarContent}</div>
-        <div class="chat-header-info">
+        <div class="chat-avatar" style="width:40px;height:40px;font-size:1rem;cursor:pointer;"
+            onclick="viewProfile(${char.id})">${avatarContent}</div>
+        <div class="chat-header-info" style="cursor:pointer;" onclick="viewProfile(${char.id})">
             <div class="chat-header-name">${char.name}</div>
             <div class="chat-header-task">${char.role}</div>
         </div>
+        <button class="btn btn-ghost" style="font-size:0.8rem; padding:6px 12px;"
+            onclick="openEditCharacter(${char.id})">✏️ Edit</button>
     `;
 
-    // Load tasks
     const res  = await fetch(`/api/characters/${charId}/tasks`);
     const data = await res.json();
+    window._allTasks = data.tasks;
     renderTaskTabs(data.tasks);
 
-    // Select first incomplete task
     const firstTask = data.tasks.find(t => !t.is_complete) || data.tasks[0];
     if (firstTask) selectTask(firstTask.id);
     else clearMessages();
@@ -300,10 +399,104 @@ function renderTaskTabs(tasks) {
         const tab = document.createElement("button");
         tab.className = `task-tab${t.is_complete ? " task-tab-done" : ""}`;
         tab.id = `tab-${t.id}`;
+
+        const wrapper = document.createElement("div");
+        wrapper.style.cssText = "display:flex; align-items:center; gap:6px;";
+
+        const label = document.createElement("span");
+        label.textContent = t.name;
+        label.onclick = () => selectTask(t.id);
+
+        const menuBtn = document.createElement("span");
+        menuBtn.textContent = "⋯";
+        menuBtn.style.cssText = "font-size:0.85rem; opacity:0.6; cursor:pointer; padding:0 2px;";
+        menuBtn.onclick = (e) => { e.stopPropagation(); showTaskContextMenu(e, t); };
+
+        wrapper.appendChild(label);
+        wrapper.appendChild(menuBtn);
+        tab.appendChild(wrapper);
         tab.onclick = () => selectTask(t.id);
-        tab.textContent = t.name;
         tabs.appendChild(tab);
     });
+}
+
+// ── Task context menu ──────────────────────────────────────────
+function showTaskContextMenu(e, task) {
+    removeContextMenu();
+    const menu = document.createElement("div");
+    menu.className = "context-menu";
+    menu.id = "context-menu";
+    menu.style.top  = `${e.clientY}px`;
+    menu.style.left = `${e.clientX}px`;
+    menu.innerHTML = `
+        <div class="context-item" onclick="openEditTask(${task.id})">✏️ Edit Task</div>
+        <div class="context-divider"></div>
+        <div class="context-item context-danger" onclick="confirmDeleteTask(${task.id}, '${task.name}')">🗑️ Delete Task</div>
+    `;
+    document.body.appendChild(menu);
+    setTimeout(() => document.addEventListener("click", removeContextMenu, { once: true }), 10);
+}
+
+// ── Edit task ──────────────────────────────────────────────────
+function openEditTask(taskId) {
+    removeContextMenu();
+    const task = window._allTasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    editingTaskId = taskId;
+
+    document.getElementById("panel-task").style.display      = "block";
+    document.getElementById("panel-character").style.display = "none";
+    document.getElementById("side-panel").classList.add("open");
+    document.getElementById("panel-backdrop").classList.add("open");
+
+    renderCharacterSelector();
+
+    document.getElementById("t-name").value        = task.name;
+    document.getElementById("t-description").value = task.description;
+    document.getElementById("t-deadline").value    = task.deadline;
+    document.getElementById("t-mpd").value         = task.messages_per_day;
+
+    document.querySelector("#panel-task .btn-primary").textContent = "Save Changes";
+    document.querySelector("#panel-task .btn-primary").onclick = saveTask;
+    document.querySelector("#panel-task .panel-title") &&
+        (document.querySelectorAll(".panel-title")[1].textContent = "Edit Task");
+}
+
+async function saveTask() {
+    const name        = document.getElementById("t-name").value.trim();
+    const description = document.getElementById("t-description").value.trim();
+    const deadline    = document.getElementById("t-deadline").value;
+    const mpd         = parseInt(document.getElementById("t-mpd").value);
+
+    if (!name || !description || !deadline) { alert("All fields required."); return; }
+
+    const res = await fetch(`/api/tasks/${editingTaskId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, description, deadline, messages_per_day: mpd })
+    });
+
+    if (!res.ok) { alert("Something went wrong."); return; }
+
+    editingTaskId = null;
+    closePanel();
+    selectCharacter(activeCharId);
+}
+
+// ── Delete task ────────────────────────────────────────────────
+function confirmDeleteTask(taskId, name) {
+    removeContextMenu();
+    if (!confirm(`Delete task "${name}"? This cannot be undone.`)) return;
+    deleteTask(taskId);
+}
+
+async function deleteTask(taskId) {
+    const res = await fetch(`/api/tasks/${taskId}`, { method: "DELETE" });
+    if (res.ok) {
+        if (activeTaskId === taskId) activeTaskId = null;
+        selectCharacter(activeCharId);
+    }
 }
 
 // ── Select task ────────────────────────────────────────────────
@@ -311,17 +504,15 @@ async function selectTask(taskId) {
     activeTaskId = taskId;
     lastMsgCount = 0;
 
-    // Highlight tab
     document.querySelectorAll(".task-tab").forEach(t => t.classList.remove("active"));
     const tab = document.getElementById(`tab-${taskId}`);
     if (tab) tab.classList.add("active");
 
-    // Load history
     await loadHistory();
 
-    // Update input area
-    const task = findTask(taskId);
+    const task = window._allTasks.find(t => t.id === taskId);
     const inputArea = document.getElementById("chat-input-area");
+
     if (task && task.is_complete) {
         inputArea.innerHTML = `
             <div style="width:100%; text-align:center; color:var(--text-dim); font-size:0.85rem; padding:8px;">
@@ -337,11 +528,6 @@ async function selectTask(taskId) {
             <button class="btn btn-ghost btn-sm" onclick="getAutoMessage()" id="auto-btn">📩 Prompt</button>
         `;
     }
-}
-
-function findTask(taskId) {
-    // Search through all characters' tasks
-    return window._allTasks ? window._allTasks.find(t => t.id === taskId) : null;
 }
 
 // ── Load history ───────────────────────────────────────────────
@@ -372,8 +558,6 @@ async function loadHistory() {
 // ── Render message ─────────────────────────────────────────────
 function renderMessage(msg, char) {
     const container = document.getElementById("chat-messages");
-
-    // Remove empty state if present
     const empty = container.querySelector(".empty-state");
     if (empty) empty.remove();
 
@@ -429,7 +613,7 @@ async function sendReply() {
     const text  = input ? input.value.trim() : "";
     if (!text) return;
 
-    input.value = "";
+    input.value    = "";
     input.disabled = true;
 
     const char = characters.find(c => c.id === activeCharId);
@@ -453,9 +637,7 @@ async function sendReply() {
 async function markDone() {
     if (!activeTaskId) return;
     const res = await fetch(`/api/tasks/${activeTaskId}/complete`, { method: "PATCH" });
-    if (res.ok) {
-        selectCharacter(activeCharId);
-    }
+    if (res.ok) selectCharacter(activeCharId);
 }
 
 // ── Clear messages ─────────────────────────────────────────────
@@ -466,14 +648,32 @@ function clearMessages() {
             <p>No tasks yet. Add one from the sidebar.</p>
         </div>`;
     document.getElementById("task-tabs").innerHTML = "";
+    document.getElementById("chat-input-area").innerHTML = "";
 }
 
 // ── Panel ──────────────────────────────────────────────────────
 function openPanel(type) {
+    editingCharId = null;
+    editingTaskId = null;
+
     document.getElementById("panel-character").style.display = type === "character" ? "block" : "none";
     document.getElementById("panel-task").style.display      = type === "task"      ? "block" : "none";
 
-    if (type === "task") renderCharacterSelector();
+    // Reset forms and buttons
+    if (type === "character") {
+        ["c-name","c-role","c-personality","c-picture"].forEach(id => document.getElementById(id).value = "");
+        document.querySelector("#panel-character .btn-primary").textContent = "Create Character";
+        document.querySelector("#panel-character .btn-primary").onclick = createCharacter;
+        document.querySelector(".panel-title").textContent = "New Character";
+    }
+
+    if (type === "task") {
+        renderCharacterSelector();
+        ["t-name","t-description","t-deadline"].forEach(id => document.getElementById(id).value = "");
+        document.getElementById("t-mpd").value = "3";
+        document.querySelector("#panel-task .btn-primary").textContent = "Add Task";
+        document.querySelector("#panel-task .btn-primary").onclick = createTask;
+    }
 
     document.getElementById("side-panel").classList.add("open");
     document.getElementById("panel-backdrop").classList.add("open");
@@ -484,7 +684,7 @@ function closePanel() {
     document.getElementById("panel-backdrop").classList.remove("open");
 }
 
-// ── Character selector in task panel ──────────────────────────
+// ── Character selector ─────────────────────────────────────────
 function renderCharacterSelector() {
     const sel = document.getElementById("character-selector");
     sel.innerHTML = "";
@@ -511,8 +711,10 @@ function renderCharacterSelector() {
         };
         chip.innerHTML = `
             <div class="char-chip-avatar">${avatarContent}</div>
-            <div class="char-chip-name">${c.name}</div>
-            <div class="char-chip-role">${c.role}</div>
+            <div>
+                <div class="char-chip-name">${c.name}</div>
+                <div class="char-chip-role">${c.role}</div>
+            </div>
         `;
         sel.appendChild(chip);
     });
@@ -525,9 +727,7 @@ async function createCharacter() {
     const personality = document.getElementById("c-personality").value.trim();
     const picture     = document.getElementById("c-picture").value.trim();
 
-    if (!name || !role || !personality) {
-        alert("Name, role, and personality are required."); return;
-    }
+    if (!name || !role || !personality) { alert("Name, role, and personality are required."); return; }
 
     const res = await fetch("/api/characters", {
         method: "POST",
@@ -538,7 +738,6 @@ async function createCharacter() {
     const data = await res.json();
     if (!res.ok) { alert(data.error || "Something went wrong."); return; }
 
-    ["c-name","c-role","c-personality","c-picture"].forEach(id => document.getElementById(id).value = "");
     closePanel();
     await loadCharacters();
     selectCharacter(data.id);
@@ -564,19 +763,11 @@ async function createTask() {
     const data = await res.json();
     if (!res.ok) { alert(data.error || "Something went wrong."); return; }
 
-    ["t-name","t-description","t-deadline"].forEach(id => document.getElementById(id).value = "");
-    document.getElementById("t-mpd").value = "3";
     closePanel();
-
-    // Refresh character view
-    if (activeCharId === charId) {
-        selectCharacter(charId);
-    } else {
-        selectCharacter(charId);
-    }
+    selectCharacter(charId);
 }
 
-// ── Poll for new messages ──────────────────────────────────────
+// ── Poll ───────────────────────────────────────────────────────
 async function poll() {
     if (!activeTaskId) return;
     const res  = await fetch(`/api/tasks/${activeTaskId}/history`);
