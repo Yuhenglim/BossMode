@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ character.name }} — BossMode</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="page">
+    <div class="page-header">
+        <div style="display:flex; align-items:center; gap:20px;">
+            <a href="/" class="back-link">← Back</a>
+            <div style="display:flex; align-items:center; gap:14px;">
+                <div class="card-avatar">
+                    {% if character.picture %}
+                        <img src="{{ character.picture }}" alt="{{ character.name }}">
+                    {% else %}
+                        🎭
+                    {% endif %}
+                </div>
+                <div>
+                    <div class="page-title" style="font-size:1.3rem;">{{ character.name }}</div>
+                    <div class="card-role" style="margin-top:1px;">{{ character.role }}</div>
+                </div>
+            </div>
+        </div>
+        <button class="btn btn-primary" onclick="openModal()">+ New Task</button>
+    </div>
+
+    <div class="task-list" id="task-list">
+        <div class="empty-state" id="empty-state">
+            <div class="icon">📋</div>
+            <p>No tasks yet. Add one to start getting messages from {{ character.name }}.</p>
+        </div>
+    </div>
+</div>
+
+<!-- Modal -->
+<div class="modal-backdrop" id="modal-backdrop" onclick="closeOnBackdrop(event)">
+    <div class="modal">
+        <div class="modal-title">New Task</div>
+
+        <div class="form-group">
+            <label>Task Name</label>
+            <input type="text" id="input-name" placeholder="e.g. Finish assignment">
+        </div>
+
+        <div class="form-group">
+            <label>Description</label>
+            <textarea id="input-description" rows="3"
+                placeholder="e.g. Complete chapters 3 and 4 and submit on the portal"></textarea>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label>Deadline</label>
+                <input type="date" id="input-deadline">
+            </div>
+            <div class="form-group">
+                <label>Messages per day</label>
+                <select id="input-mpd">
+                    <option value="1">1 — light</option>
+                    <option value="2">2 — moderate</option>
+                    <option value="3" selected>3 — default</option>
+                    <option value="4">4 — persistent</option>
+                    <option value="6">6 — relentless</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="modal-actions">
+            <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="createTask()">Add Task</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const CHARACTER_NAME = "{{ character.name }}";
+
+    function getUrgency(deadline, isComplete) {
+        if (isComplete) return { label: "Done", cls: "badge-complete" };
+        const today = new Date(); today.setHours(0,0,0,0);
+        const days = Math.round((new Date(deadline) - today) / 86400000);
+        if (days < 0)  return { label: "Overdue", cls: "badge-urgent" };
+        if (days <= 1) return { label: "Due tomorrow", cls: "badge-urgent" };
+        if (days <= 3) return { label: `${days} days left`, cls: "badge-pending" };
+        return { label: `${days} days left`, cls: "badge-pending" };
+    }
+
+    async function loadTasks() {
+        const res = await fetch(`/characters/${encodeURIComponent(CHARACTER_NAME)}/tasks`);
+        const data = await res.json();
+        const list = document.getElementById("task-list");
+        const empty = document.getElementById("empty-state");
+
+        if (data.tasks.length === 0) { empty.style.display = "block"; return; }
+
+        empty.style.display = "none";
+        list.innerHTML = "";
+
+        data.tasks.forEach(t => {
+            const urgency = getUrgency(t.deadline, t.is_complete);
+            const card = document.createElement("div");
+            card.className = `task-card${!t.is_complete ? " clickable" : ""}`;
+
+            if (!t.is_complete) {
+                card.onclick = () => window.location.href =
+                    `/characters/${encodeURIComponent(CHARACTER_NAME)}/tasks/${encodeURIComponent(t.name)}/chat`;
+            }
+
+            card.innerHTML = `
+                <div class="task-info">
+                    <div class="task-name">${t.name}</div>
+                    <div class="task-deadline">Due ${t.deadline}</div>
+                    <div class="task-desc">${t.description}</div>
+                </div>
+                <span class="task-badge ${urgency.cls}">${urgency.label}</span>
+            `;
+            list.appendChild(card);
+        });
+    }
+
+    async function createTask() {
+        const name             = document.getElementById("input-name").value.trim();
+        const description      = document.getElementById("input-description").value.trim();
+        const deadline         = document.getElementById("input-deadline").value;
+        const messages_per_day = parseInt(document.getElementById("input-mpd").value);
+
+        if (!name || !description || !deadline) { alert("All fields are required."); return; }
+
+        const res = await fetch(`/characters/${encodeURIComponent(CHARACTER_NAME)}/tasks`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name, description, deadline, messages_per_day })
+        });
+
+        const data = await res.json();
+        if (!res.ok) { alert(data.error || "Something went wrong."); return; }
+
+        closeModal(); clearForm(); loadTasks();
+    }
+
+    function openModal()  { document.getElementById("modal-backdrop").classList.add("open"); }
+    function closeModal() { document.getElementById("modal-backdrop").classList.remove("open"); }
+    function closeOnBackdrop(e) {
+        if (e.target === document.getElementById("modal-backdrop")) closeModal();
+    }
+    function clearForm() {
+        ["input-name","input-description","input-deadline"].forEach(id => document.getElementById(id).value = "");
+        document.getElementById("input-mpd").value = "3";
+    }
+
+    loadTasks();
+</script>
+</body>
+</html>

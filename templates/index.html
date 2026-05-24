@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BossMode</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="page">
+    <div class="page-header">
+        <div>
+            <div class="brand">
+                <div class="brand-dot"></div>
+                <span class="brand-name">BossMode</span>
+            </div>
+            <div class="page-subtitle">Your accountability characters</div>
+        </div>
+        <button class="btn btn-primary" onclick="openModal()">+ New Character</button>
+    </div>
+
+    <div class="card-grid" id="character-grid">
+        <div class="empty-state" id="empty-state">
+            <div class="icon">🎭</div>
+            <p>No characters yet. Create one to start getting pushed.</p>
+        </div>
+    </div>
+</div>
+
+<!-- Modal -->
+<div class="modal-backdrop" id="modal-backdrop" onclick="closeOnBackdrop(event)">
+    <div class="modal">
+        <div class="modal-title">New Character</div>
+
+        <div class="form-group">
+            <label>Name</label>
+            <input type="text" id="input-name" placeholder="e.g. Mr. Tan">
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label>Role</label>
+                <input type="text" id="input-role" placeholder="e.g. Boss">
+            </div>
+            <div class="form-group">
+                <label>Picture URL (optional)</label>
+                <input type="text" id="input-picture" placeholder="https://...">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Personality</label>
+            <textarea id="input-personality" rows="3"
+                placeholder="e.g. Extremely demanding, no patience for excuses, speaks in short sharp sentences"></textarea>
+        </div>
+
+        <div class="modal-actions">
+            <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="createCharacter()">Create</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    async function loadCharacters() {
+        const res = await fetch("/api/characters");
+        const data = await res.json();
+        const grid = document.getElementById("character-grid");
+        const empty = document.getElementById("empty-state");
+
+        if (data.characters.length === 0) {
+            empty.style.display = "block";
+            return;
+        }
+
+        empty.style.display = "none";
+        grid.innerHTML = "";
+
+        data.characters.forEach(c => {
+            const card = document.createElement("div");
+            card.className = "card";
+            card.onclick = () => window.location.href = `/characters/${encodeURIComponent(c.name)}`;
+
+            const avatarContent = c.picture
+                ? `<img src="${c.picture}" alt="${c.name}">`
+                : `🎭`;
+
+            card.innerHTML = `
+                <div class="card-avatar">${avatarContent}</div>
+                <div class="card-role">${c.role}</div>
+                <div class="card-name">${c.name}</div>
+                <div class="card-meta">${c.personality.slice(0, 72)}${c.personality.length > 72 ? "…" : ""}</div>
+            `;
+            grid.appendChild(card);
+        });
+    }
+
+    async function createCharacter() {
+        const name        = document.getElementById("input-name").value.trim();
+        const role        = document.getElementById("input-role").value.trim();
+        const picture     = document.getElementById("input-picture").value.trim();
+        const personality = document.getElementById("input-personality").value.trim();
+
+        if (!name || !role || !personality) {
+            alert("Name, role, and personality are required.");
+            return;
+        }
+
+        const res = await fetch("/api/characters", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name, role, picture, personality })
+        });
+
+        const data = await res.json();
+        if (!res.ok) { alert(data.error || "Something went wrong."); return; }
+
+        closeModal();
+        clearForm();
+        loadCharacters();
+    }
+
+    function openModal()  { document.getElementById("modal-backdrop").classList.add("open"); }
+    function closeModal() { document.getElementById("modal-backdrop").classList.remove("open"); }
+    function closeOnBackdrop(e) {
+        if (e.target === document.getElementById("modal-backdrop")) closeModal();
+    }
+    function clearForm() {
+        ["input-name","input-role","input-picture","input-personality"]
+            .forEach(id => document.getElementById(id).value = "");
+    }
+
+    loadCharacters();
+</script>
+</body>
+</html>
