@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ character.name }} — BossMode</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="page">
+    <div class="page-header">
+        <a href="/" class="back-link">← Back</a>
+    </div>
+
+    <!-- Profile card -->
+    <div style="display:flex; align-items:center; gap:24px; margin-bottom:40px;">
+        <div class="card-avatar" style="width:80px; height:80px; font-size:2rem; flex-shrink:0;">
+            {% if character.picture %}
+                <img src="{{ character.picture }}" alt="{{ character.name }}">
+            {% else %}
+                {{ character.name[0].upper() }}
+            {% endif %}
+        </div>
+        <div>
+            <div class="page-title">{{ character.name }}</div>
+            <div class="card-role" style="margin-top:4px;">{{ character.role }}</div>
+            <div style="font-size:0.85rem; color:var(--text-mid); margin-top:8px; max-width:500px; line-height:1.6;">
+                {{ character.personality }}
+            </div>
+        </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Stats -->
+    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:40px;">
+        <div style="background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--radius-lg); padding:20px; text-align:center; box-shadow:var(--shadow-sm);">
+            <div style="font-family:'Lora',serif; font-size:2rem; font-weight:600; color:var(--accent);">{{ total }}</div>
+            <div style="font-size:0.8rem; color:var(--text-dim); margin-top:4px;">Total Tasks</div>
+        </div>
+        <div style="background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--radius-lg); padding:20px; text-align:center; box-shadow:var(--shadow-sm);">
+            <div style="font-family:'Lora',serif; font-size:2rem; font-weight:600; color:var(--success);">{{ completed }}</div>
+            <div style="font-size:0.8rem; color:var(--text-dim); margin-top:4px;">Completed</div>
+        </div>
+        <div style="background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--radius-lg); padding:20px; text-align:center; box-shadow:var(--shadow-sm);">
+            <div style="font-family:'Lora',serif; font-size:2rem; font-weight:600; color:var(--danger);">{{ pending }}</div>
+            <div style="font-size:0.8rem; color:var(--text-dim); margin-top:4px;">Pending</div>
+        </div>
+    </div>
+
+    <!-- Tasks list -->
+    <h2 style="font-family:'Lora',serif; font-size:1.2rem; margin-bottom:16px;">Tasks</h2>
+
+    {% if tasks %}
+        <div class="task-list">
+            {% for task in tasks %}
+            <div class="task-card {% if not task.is_complete %}clickable{% endif %}"
+                {% if not task.is_complete %}
+                onclick="window.location.href='/'"
+                {% endif %}>
+                <div class="task-info">
+                    <div class="task-name">{{ task.name }}</div>
+                    <div class="task-deadline">Due {{ task.deadline }}</div>
+                    <div class="task-desc">{{ task.description }}</div>
+                </div>
+                {% if task.is_complete %}
+                    <span class="task-badge badge-complete">✓ Done</span>
+                {% else %}
+                    <span class="task-badge badge-pending">Pending</span>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="empty-state">
+            <div class="icon">📋</div>
+            <p>No tasks assigned to {{ character.name }} yet.</p>
+        </div>
+    {% endif %}
+
+</div>
+
+</body>
+</html>

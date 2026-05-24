@@ -264,7 +264,11 @@ def delete_task(task_id):
 def character_profile(character_id):
     character = Character.query.filter_by(id=character_id, user_id=current_user.id).first_or_404()
     tasks = Task.query.filter_by(character_id=character_id).all()
-    return render_template("profile.html", character=character, tasks=tasks, user=current_user)
+    total = len(tasks)
+    completed = sum(1 for t in tasks if t.is_complete)
+    pending = total - completed
+    return render_template("profile.html", character=character, tasks=tasks,
+                           user=current_user, total=total, completed=completed, pending=pending)
 
 if __name__ == "__main__":
     app.run(debug=False)
