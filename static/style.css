@@ -1323,3 +1323,47 @@ a { color: inherit; text-decoration: none; }
 @media (max-width: 768px) {
     .mobile-topbar { display: flex; }
 }
+
+/* ── Image upload ─────────────────────────────────────────── */
+.upload-area {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius-md);
+    padding: 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--surface2);
+}
+
+.upload-area:hover {
+    border-color: var(--accent);
+    background: var(--accent-dim);
+}
+
+.upload-area.has-image {
+    border-color: var(--success);
+    background: var(--success-dim);
+}
+
+.upload-icon { font-size: 1.5rem; margin-bottom: 6px; }
+
+.upload-text {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-mid);
+}
+
+.upload-sub {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    margin-top: 2px;
+}
+
+.upload-preview {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin: 0 auto 8px;
+    display: block;
+}
