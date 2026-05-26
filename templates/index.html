@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BossMode</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
 </head>
 <body class="app-body">
 
@@ -197,6 +199,21 @@
 
     </div>
 
+<!-- Crop modal -->
+<div class="modal-backdrop" id="crop-backdrop">
+    <div class="modal" style="max-width:500px;" onclick="event.stopPropagation()">
+        <div class="modal-title">Crop Photo</div>
+        <div style="max-height:360px; overflow:hidden; border-radius:var(--radius-md); background:#000;">
+            <img id="crop-image" style="max-width:100%; display:block;">
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-ghost" onclick="cancelCrop()">Cancel</button>
+            <button class="btn btn-primary" onclick="confirmCrop()">✓ Use This Crop</button>
+        </div>
+    </div>
+</div>
+
+
 </div>
 
 <!-- Notification -->
@@ -225,29 +242,65 @@ function closeSidebar() {
 }
 
 // ── Image upload (base64) ──────────────────────────────────
+// ── Image upload + crop ────────────────────────────────────
+let cropper = null;
+let cropTargetId = "c-picture";
+
 function handleImageUpload(event) {
     const file = event.target.files[0];
     if (!file) return;
 
-    if (file.size > 1024 * 1024) {
-        alert("Image too large — please use an image under 1MB.");
+    if (file.size > 5 * 1024 * 1024) {
+        alert("Image too large — please use an image under 5MB.");
         return;
     }
 
     const reader = new FileReader();
     reader.onload = function(e) {
-        const base64 = e.target.result;
-        document.getElementById("c-picture").value = base64;
+        const img = document.getElementById("crop-image");
+        img.src = e.target.result;
 
-        const area = document.getElementById("upload-area");
-        area.classList.add("has-image");
-        area.innerHTML = `
-            <img src="${base64}" class="upload-preview">
-            <div class="upload-text" style="color:var(--success);">✓ Photo ready</div>
-            <div class="upload-sub">Click to change</div>
-        `;
+        // Open crop modal
+        document.getElementById("crop-backdrop").classList.add("open");
+
+        // Init cropper
+        if (cropper) { cropper.destroy(); cropper = null; }
+        img.onload = function() {
+            cropper = new Cropper(img, {
+                aspectRatio: 1,
+                viewMode: 2,
+                movable: true,
+                zoomable: true,
+                rotatable: false,
+                scalable: false,
+            });
+        };
     };
     reader.readAsDataURL(file);
+}
+
+function cancelCrop() {
+    document.getElementById("crop-backdrop").classList.remove("open");
+    if (cropper) { cropper.destroy(); cropper = null; }
+}
+
+function confirmCrop() {
+    if (!cropper) return;
+
+    const canvas = cropper.getCroppedCanvas({ width: 256, height: 256 });
+    const base64 = canvas.toDataURL("image/jpeg", 0.85);
+
+    document.getElementById("c-picture").value = base64;
+
+    const area = document.getElementById("upload-area");
+    area.classList.add("has-image");
+    area.innerHTML = `
+        <img src="${base64}" class="upload-preview">
+        <div class="upload-text" style="color:var(--success);">✓ Photo ready</div>
+        <div class="upload-sub">Click to change</div>
+    `;
+
+    cancelCrop();
 }
 
     // ── State ──────────────────────────────────────────────────────

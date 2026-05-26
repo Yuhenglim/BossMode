@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ character.name }} — BossMode</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>  
 </head>
 <body>
 
@@ -22,11 +24,53 @@
                 {{ character.name[0].upper() }}
             {% endif %}
         </div>
-        <div>
+        <div style="flex:1;">
             <div class="page-title">{{ character.name }}</div>
             <div class="card-role" style="margin-top:4px;">{{ character.role }}</div>
             <div style="font-size:0.85rem; color:var(--text-mid); margin-top:8px; max-width:500px; line-height:1.6;">
                 {{ character.personality }}
+            </div>
+        </div>
+        <button class="btn btn-ghost" onclick="openEditPanel()">✏️ Edit</button>
+    </div>
+
+    <!-- Edit panel (hidden by default) -->
+    <div class="modal-backdrop" id="edit-backdrop" onclick="closeEditPanel()">
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-title">Edit Character</div>
+
+            <div class="form-group">
+                <label>Name</label>
+                <input type="text" id="e-name" value="{{ character.name }}">
+            </div>
+            <div class="form-group">
+                <label>Role</label>
+                <input type="text" id="e-role" value="{{ character.role }}">
+            </div>
+            <div class="form-group">
+                <label>Personality</label>
+                <textarea id="e-personality" rows="4">{{ character.personality }}</textarea>
+            </div>
+            <div class="form-group">
+                <label>Picture</label>
+                <div class="upload-area" id="upload-area" onclick="document.getElementById('img-upload').click()">
+                    {% if character.picture %}
+                        <img src="{{ character.picture }}" class="upload-preview">
+                        <div class="upload-text" style="color:var(--success);">✓ Current photo</div>
+                        <div class="upload-sub">Click to change</div>
+                    {% else %}
+                        <div class="upload-icon">📷</div>
+                        <div class="upload-text">Click to upload a photo</div>
+                        <div class="upload-sub">JPG, PNG — max 1MB</div>
+                    {% endif %}
+                </div>
+                <input type="file" id="img-upload" accept="image/*" style="display:none" onchange="handleImageUpload(event)">
+                <input type="text" id="e-picture" value="{{ character.picture or '' }}" placeholder="Or paste a URL" style="margin-top:8px;">
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn btn-ghost" onclick="closeEditPanel()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveEdit()">Save Changes</button>
             </div>
         </div>
     </div>
@@ -79,6 +123,91 @@
         </div>
     {% endif %}
 
+</div>
+
+<script>
+const CHARACTER_ID = {{ character.id }};
+
+function openEditPanel() {
+    document.getElementById("edit-backdrop").classList.add("open");
+}
+
+function closeEditPanel() {
+    document.getElementById("edit-backdrop").classList.remove("open");
+}
+
+let cropper = null;
+
+function handleImageUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const img = document.getElementById("crop-image");
+        img.src = e.target.result;
+        document.getElementById("crop-backdrop").classList.add("open");
+        if (cropper) { cropper.destroy(); cropper = null; }
+        img.onload = function() {
+            cropper = new Cropper(img, { aspectRatio: 1, viewMode: 2 });
+        };
+    };
+    reader.readAsDataURL(file);
+}
+
+function cancelCrop() {
+    document.getElementById("crop-backdrop").classList.remove("open");
+    if (cropper) { cropper.destroy(); cropper = null; }
+}
+
+function confirmCrop() {
+    if (!cropper) return;
+    const canvas = cropper.getCroppedCanvas({ width: 256, height: 256 });
+    const base64 = canvas.toDataURL("image/jpeg", 0.85);
+
+    document.getElementById("e-picture").value = base64;
+
+    const area = document.getElementById("upload-area");
+    area.classList.add("has-image");
+    area.innerHTML = `
+        <img src="${base64}" class="upload-preview">
+        <div class="upload-text" style="color:var(--success);">✓ Photo ready</div>
+        <div class="upload-sub">Click to change</div>
+    `;
+    cancelCrop();
+}
+
+async function saveEdit() {
+    const name        = document.getElementById("e-name").value.trim();
+    const role        = document.getElementById("e-role").value.trim();
+    const personality = document.getElementById("e-personality").value.trim();
+    const picture     = document.getElementById("e-picture").value.trim();
+
+    if (!name || !role || !personality) { alert("All fields required."); return; }
+
+    const res = await fetch(`/api/characters/${CHARACTER_ID}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, role, personality, picture })
+    });
+
+    if (!res.ok) { alert("Something went wrong."); return; }
+    window.location.reload();
+}
+</script>
+
+<!-- Crop modal -->
+<div class="modal-backdrop" id="crop-backdrop">
+    <div class="modal" style="max-width:500px;" onclick="event.stopPropagation()">
+        <div class="modal-title">Crop Photo</div>
+        <div style="max-height:360px; overflow:hidden; border-radius:var(--radius-md); background:#000;">
+            <img id="crop-image" style="max-width:100%; display:block;">
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-ghost" onclick="cancelCrop()">Cancel</button>
+            <button class="btn btn-primary" onclick="confirmCrop()">✓ Use This Crop</button>
+        </div>
+    </div>
 </div>
 
 </body>
