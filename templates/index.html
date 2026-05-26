@@ -343,22 +343,22 @@ function openEditCharacter(charId) {
     document.querySelector("#panel-character .btn-primary").onclick = saveCharacter;
     document.querySelector(".panel-title").textContent = "Edit Character";
 
-    // ── Mobile sidebar ─────────────────────────────────────────
-    function toggleSidebar() {
-        const sidebar  = document.querySelector(".sidebar");
-        const overlay  = document.getElementById("sidebar-overlay");
-        const isOpen   = sidebar.classList.contains("mobile-open");
-        if (isOpen) closeSidebar();
-        else {
-            sidebar.classList.add("mobile-open");
-            overlay.classList.add("open");
-        }
+// ── Mobile sidebar ─────────────────────────────────────────
+function toggleSidebar() {
+    const sidebar  = document.querySelector(".sidebar");
+    const overlay  = document.getElementById("sidebar-overlay");
+    const isOpen   = sidebar.classList.contains("mobile-open");
+    if (isOpen) closeSidebar();
+    else {
+        sidebar.classList.add("mobile-open");
+        overlay.classList.add("open");
     }
+}
 
-    function closeSidebar() {
-        document.querySelector(".sidebar").classList.remove("mobile-open");
-        document.getElementById("sidebar-overlay").classList.remove("open");
-    }
+function closeSidebar() {
+    document.querySelector(".sidebar").classList.remove("mobile-open");
+    document.getElementById("sidebar-overlay").classList.remove("open");
+}
 }
 
 async function saveCharacter() {
