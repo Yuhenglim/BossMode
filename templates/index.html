@@ -136,9 +136,14 @@
                         placeholder="e.g. Extremely demanding, no patience for excuses, speaks in short sharp sentences"></textarea>
                 </div>
                 <div class="form-group">
-                    <label>Picture URL (optional)</label>
-                    <input type="text" id="c-picture"
-                        placeholder="https://api.dicebear.com/7.x/avataaars/svg?seed=name">
+                    <label>Picture</label>
+                    <div class="upload-area" id="upload-area" onclick="document.getElementById('img-upload').click()">
+                        <div class="upload-icon">📷</div>
+                        <div class="upload-text">Click to upload a photo</div>
+                        <div class="upload-sub">JPG, PNG, GIF — max 1MB</div>
+                    </div>
+                    <input type="file" id="img-upload" accept="image/*" style="display:none" onchange="handleImageUpload(event)">
+                    <input type="text" id="c-picture" placeholder="Or paste a URL here" style="margin-top:8px;">
                 </div>
                 <button class="btn btn-primary" style="width:100%;" onclick="createCharacter()">
                     Create Character
@@ -201,6 +206,33 @@
 </div>
 
 <script>
+
+// ── Image upload (base64) ──────────────────────────────────
+function handleImageUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (file.size > 1024 * 1024) {
+        alert("Image too large — please use an image under 1MB.");
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const base64 = e.target.result;
+        document.getElementById("c-picture").value = base64;
+
+        const area = document.getElementById("upload-area");
+        area.classList.add("has-image");
+        area.innerHTML = `
+            <img src="${base64}" class="upload-preview">
+            <div class="upload-text" style="color:var(--success);">✓ Photo ready</div>
+            <div class="upload-sub">Click to change</div>
+        `;
+    };
+    reader.readAsDataURL(file);
+}
+
     // ── State ──────────────────────────────────────────────────────
 let characters   = [];
 let activeCharId = null;
