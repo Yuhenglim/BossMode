@@ -313,5 +313,55 @@ def dashboard():
         today=today
     )
 
+@app.route("/api/characters/<int:character_id>/reply", methods=["POST"])
+@login_required
+def character_reply_no_task(character_id):
+    character = Character.query.filter_by(id=character_id, user_id=current_user.id).first_or_404()
+    data = request.json
+    user_text = data.get("message", "").strip()
+    if not user_text:
+        return jsonify({"error": "Empty message"}), 400
+
+    from ai_service import generate_no_task_reply
+    reply = generate_no_task_reply(character, user_text)
+    return jsonify({"reply": reply})
+
+@app.route("/api/tasks/<int:task_id>/complete-with-proof", methods=["POST"])
+@login_required
+def complete_with_proof(task_id):
+    task = Task.query.join(Character).filter(
+        Task.id == task_id,
+        Character.user_id == current_user.id
+    ).first_or_404()
+
+    data = request.json
+    proof = data.get("proof", "")  # base64 image
+
+    # Save a completion message with the proof
+    content = "✅ Task marked as complete."
+    if proof:
+        content = f"✅ Task marked as complete. Proof submitted."
+
+    task.is_complete = True
+
+    # Save proof as a system message
+    msg = Message(content=content, task_id=task.id, is_user=True)
+    db.session.add(msg)
+    db.session.commit()
+
+    # Generate character response to completion
+    from ai_service import generate_reply
+    reply_content = generate_reply(task.character, task,
+        "I have finished the task and submitted proof of completion.")
+    reply_msg = Message(content=reply_content, task_id=task.id, is_user=False)
+    db.session.add(reply_msg)
+    db.session.commit()
+
+    return jsonify({
+        "message": msg.to_dict(),
+        "reply": reply_msg.to_dict(),
+        "proof": proof
+    })
+
 if __name__ == "__main__":
     app.run(debug=False)

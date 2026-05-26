@@ -76,3 +76,23 @@ def generate_reply(character, task, user_message):
     )
 
     return response.content[0].text
+
+def generate_no_task_reply(character, user_message):
+    prompt = f"""
+    You are {character.name}, a {character.role}.
+    Your personality is: {character.personality}.
+
+    Your employee just messaged you but you have no tasks for them right now.
+    They said: "{user_message}"
+
+    Respond in character — briefly acknowledge them and let them know you'll
+    have tasks for them soon, or tell them to stay on standby.
+    Keep it to 1-2 sentences. Stay in character.
+    """
+
+    response = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=256,
+        messages=[{"role": "user", "content": prompt}]
+    )
+    return response.content[0].text

@@ -1367,3 +1367,14 @@ a { color: inherit; text-decoration: none; }
     margin: 0 auto 8px;
     display: block;
 }
+
+/* ── Send button ──────────────────────────────────────────── */
+.send-btn {
+    padding: 10px 14px;
+    border-radius: var(--radius-md);
+    flex-shrink: 0;
+}
+
+.send-btn:hover {
+    transform: translateY(-2px) rotate(-15deg);
+}

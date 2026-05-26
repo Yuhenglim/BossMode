@@ -12,6 +12,36 @@
 
 <div class="app-layout">
 
+    <!-- Proof submission modal -->
+    <div class="modal-backdrop" id="proof-backdrop">
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-title">Submit Proof</div>
+            <div style="font-size:0.85rem; color:var(--text-mid); margin-top:-8px;">
+                Upload a photo or screenshot as proof of completion.
+            </div>
+
+            <div class="upload-area" id="proof-upload-area"
+                onclick="document.getElementById('proof-input').click()">
+                <div class="upload-icon">📎</div>
+                <div class="upload-text">Click to upload proof</div>
+                <div class="upload-sub">Photo, screenshot, anything works</div>
+            </div>
+            <input type="file" id="proof-input" accept="image/*"
+                style="display:none" onchange="handleProofUpload(event)">
+
+            <div id="proof-preview" style="display:none; margin-top:8px;">
+                <img id="proof-img" style="width:100%; border-radius:var(--radius-md); max-height:200px; object-fit:cover;">
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn btn-ghost" onclick="closeProofModal()">Cancel</button>
+                <button class="btn btn-success" onclick="submitProof()" id="proof-submit-btn" disabled>
+                    ✓ Mark as Done
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- ── Sidebar ─────────────────────────────────────────── -->
     <div class="sidebar">
 
@@ -509,8 +539,12 @@ async function selectCharacter(charId) {
     renderTaskTabs(data.tasks);
 
     const firstTask = data.tasks.find(t => !t.is_complete) || data.tasks[0];
+    // At the end of selectCharacter, replace:
     if (firstTask) selectTask(firstTask.id);
-    else clearMessages();
+    else {
+        clearMessages();
+        renderInputArea(); // always show input even with no tasks
+}
 }
 
 // ── Task tabs ──────────────────────────────────────────────────
@@ -536,13 +570,17 @@ function renderTaskTabs(tasks) {
         label.textContent = t.name;
         label.onclick = () => selectTask(t.id);
 
-        const menuBtn = document.createElement("span");
-        menuBtn.textContent = "⋯";
-        menuBtn.style.cssText = "font-size:0.85rem; opacity:0.6; cursor:pointer; padding:0 2px;";
-        menuBtn.onclick = (e) => { e.stopPropagation(); showTaskContextMenu(e, t); };
+        const infoBtn = document.createElement("span");
+        infoBtn.textContent = t.is_complete ? "✓" : "⋯";
+        infoBtn.style.cssText = "font-size:0.85rem; opacity:0.6; cursor:pointer; padding:0 2px;";
+        infoBtn.onclick = (e) => {
+            e.stopPropagation();
+            if (!t.is_complete) showTaskContextMenu(e, t);
+            else showTaskContextMenu(e, t);
+        };
 
         wrapper.appendChild(label);
-        wrapper.appendChild(menuBtn);
+        wrapper.appendChild(infoBtn);
         tab.appendChild(wrapper);
         tab.onclick = () => selectTask(t.id);
         tabs.appendChild(tab);
@@ -557,11 +595,22 @@ function showTaskContextMenu(e, task) {
     menu.id = "context-menu";
     menu.style.top  = `${e.clientY}px`;
     menu.style.left = `${e.clientX}px`;
-    menu.innerHTML = `
-        <div class="context-item" onclick="openEditTask(${task.id})">✏️ Edit Task</div>
-        <div class="context-divider"></div>
-        <div class="context-item context-danger" onclick="confirmDeleteTask(${task.id}, '${task.name}')">🗑️ Delete Task</div>
-    `;
+
+    if (!task.is_complete) {
+        menu.innerHTML = `
+            <div class="context-item" onclick="openProofModal(${task.id})">✅ Submit Proof & Complete</div>
+            <div class="context-item" onclick="openEditTask(${task.id})">✏️ Edit Task</div>
+            <div class="context-divider"></div>
+            <div class="context-item context-danger" onclick="confirmDeleteTask(${task.id}, '${task.name}')">🗑️ Delete Task</div>
+        `;
+    } else {
+        menu.innerHTML = `
+            <div class="context-item" onclick="openEditTask(${task.id})">✏️ Edit Task</div>
+            <div class="context-divider"></div>
+            <div class="context-item context-danger" onclick="confirmDeleteTask(${task.id}, '${task.name}')">🗑️ Delete Task</div>
+        `;
+    }
+
     document.body.appendChild(menu);
     setTimeout(() => document.addEventListener("click", removeContextMenu, { once: true }), 10);
 }
@@ -638,26 +687,10 @@ async function selectTask(taskId) {
     if (tab) tab.classList.add("active");
 
     await loadHistory();
-
-    const task = window._allTasks.find(t => t.id === taskId);
-    const inputArea = document.getElementById("chat-input-area");
-
-    if (task && task.is_complete) {
-        inputArea.innerHTML = `
-            <div style="width:100%; text-align:center; color:var(--text-dim); font-size:0.85rem; padding:8px;">
-                Task complete — no more messages.
-            </div>`;
-    } else {
-        inputArea.innerHTML = `
-            <input type="text" id="user-input" class="chat-input"
-                placeholder="Reply to your boss..."
-                onkeydown="if(event.key==='Enter') sendReply()">
-            <button class="btn btn-success btn-sm" onclick="markDone()">✓ Done</button>
-            <button class="btn btn-primary btn-sm" onclick="sendReply()">Send</button>
-            <button class="btn btn-ghost btn-sm" onclick="getAutoMessage()" id="auto-btn">📩 Prompt</button>
-        `;
-    }
+    renderInputArea();
 }
+
+
 
 // ── Load history ───────────────────────────────────────────────
 async function loadHistory() {
@@ -683,6 +716,24 @@ async function loadHistory() {
     lastMsgCount = data.history.length;
     container.scrollTop = container.scrollHeight;
 }
+
+// ── Render Input Area ────────────────────────────
+function renderInputArea() {
+    const inputArea = document.getElementById("chat-input-area");
+    inputArea.innerHTML = `
+        <input type="text" id="user-input" class="chat-input"
+            placeholder="Message..."
+            onkeydown="if(event.key==='Enter') sendReply()">
+        <button class="btn btn-primary send-btn" onclick="sendReply()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="22" y1="2" x2="11" y2="13"></line>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+        </button>
+        <button class="btn btn-ghost btn-sm" onclick="getAutoMessage()" id="auto-btn">📩 Prompt</button>
+    `;
+}
+
 
 // ── Render message ─────────────────────────────────────────────
 function renderMessage(msg, char) {
@@ -737,7 +788,6 @@ async function getAutoMessage() {
 
 // ── Send reply ─────────────────────────────────────────────────
 async function sendReply() {
-    if (!activeTaskId) return;
     const input = document.getElementById("user-input");
     const text  = input ? input.value.trim() : "";
     if (!text) return;
@@ -746,6 +796,25 @@ async function sendReply() {
     input.disabled = true;
 
     const char = characters.find(c => c.id === activeCharId);
+
+    // If no active task, use the character-level reply
+    if (!activeTaskId) {
+        const tempMsg = { content: text, is_user: true, created_at: new Date().toISOString() };
+        renderMessage(tempMsg, char);
+
+        const res  = await fetch(`/api/characters/${activeCharId}/reply`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message: text })
+        });
+        const data = await res.json();
+        const replyMsg = { content: data.reply, is_user: false, created_at: new Date().toISOString() };
+        renderMessage(replyMsg, char);
+
+        input.disabled = false;
+        input.focus();
+        return;
+    }
 
     const res  = await fetch(`/api/tasks/${activeTaskId}/reply`, {
         method: "POST",
@@ -774,10 +843,9 @@ function clearMessages() {
     document.getElementById("chat-messages").innerHTML = `
         <div class="empty-state">
             <div class="icon">📋</div>
-            <p>No tasks yet. Add one from the sidebar.</p>
+            <p>No tasks yet — but you can still say hi.</p>
         </div>`;
     document.getElementById("task-tabs").innerHTML = "";
-    document.getElementById("chat-input-area").innerHTML = "";
 }
 
 // ── Panel ──────────────────────────────────────────────────────
@@ -922,6 +990,88 @@ function showNotification(name, message) {
     notif.classList.add("show");
     setTimeout(() => notif.classList.remove("show"), 4500);
 }
+
+// ── Proof submission ───────────────────────────────────────
+let proofBase64 = null;
+let proofTaskId = null;
+
+function openProofModal(taskId) {
+    proofTaskId = taskId;
+    proofBase64 = null;
+    document.getElementById("proof-upload-area").innerHTML = `
+        <div class="upload-icon">📎</div>
+        <div class="upload-text">Click to upload proof</div>
+        <div class="upload-sub">Photo, screenshot, anything works</div>
+    `;
+    document.getElementById("proof-preview").style.display = "none";
+    document.getElementById("proof-submit-btn").disabled = true;
+    document.getElementById("proof-backdrop").classList.add("open");
+}
+
+function closeProofModal() {
+    document.getElementById("proof-backdrop").classList.remove("open");
+    proofTaskId = null;
+    proofBase64 = null;
+}
+
+function handleProofUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        proofBase64 = e.target.result;
+
+        document.getElementById("proof-upload-area").innerHTML = `
+            <div class="upload-text" style="color:var(--success);">✓ Proof ready</div>
+            <div class="upload-sub">Click to change</div>
+        `;
+
+        const preview = document.getElementById("proof-preview");
+        const img     = document.getElementById("proof-img");
+        img.src       = proofBase64;
+        preview.style.display = "block";
+
+        document.getElementById("proof-submit-btn").disabled = false;
+    };
+    reader.readAsDataURL(file);
+}
+
+async function submitProof() {
+    if (!proofTaskId) return;
+    const btn = document.getElementById("proof-submit-btn");
+    btn.disabled = true;
+    btn.textContent = "Submitting...";
+
+    const res = await fetch(`/api/tasks/${proofTaskId}/complete-with-proof`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ proof: proofBase64 })
+    });
+
+    const data = await res.json();
+    const char = characters.find(c => c.id === activeCharId);
+
+    closeProofModal();
+
+    // Show proof image in chat
+    if (proofBase64) {
+        const proofMsg = {
+            content: `<img src="${proofBase64}" style="max-width:200px; border-radius:var(--radius-md); margin-top:4px;">`,
+            is_user: true,
+            created_at: new Date().toISOString()
+        };
+        renderMessage(proofMsg, char);
+    }
+
+    renderMessage(data.message, char);
+    renderMessage(data.reply, char);
+
+    // Refresh tasks
+    selectCharacter(activeCharId);
+}
+
+
 </script>
 
 </body>
