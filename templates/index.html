@@ -61,7 +61,15 @@
     </div>
 
     <!-- ── Main area ───────────────────────────────────────── -->
+    <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
     <div class="main-area">
+        <div class="mobile-topbar">
+            <button class="hamburger" onclick="toggleSidebar()">☰</button>
+            <div class="brand" style="position:absolute; left:50%; transform:translateX(-50%);">
+                <div class="brand-dot"></div>
+                <span class="brand-name">BossMode</span>
+            </div>
+        </div>
 
         <!-- Empty state -->
         <div class="main-empty" id="main-empty">
@@ -302,6 +310,23 @@ function openEditCharacter(charId) {
     document.querySelector("#panel-character .btn-primary").textContent = "Save Changes";
     document.querySelector("#panel-character .btn-primary").onclick = saveCharacter;
     document.querySelector(".panel-title").textContent = "Edit Character";
+
+    // ── Mobile sidebar ─────────────────────────────────────────
+    function toggleSidebar() {
+        const sidebar  = document.querySelector(".sidebar");
+        const overlay  = document.getElementById("sidebar-overlay");
+        const isOpen   = sidebar.classList.contains("mobile-open");
+        if (isOpen) closeSidebar();
+        else {
+            sidebar.classList.add("mobile-open");
+            overlay.classList.add("open");
+        }
+    }
+
+    function closeSidebar() {
+        document.querySelector(".sidebar").classList.remove("mobile-open");
+        document.getElementById("sidebar-overlay").classList.remove("open");
+    }
 }
 
 async function saveCharacter() {
@@ -348,6 +373,7 @@ async function deleteCharacter(charId) {
 
 // ── Select character ───────────────────────────────────────────
 async function selectCharacter(charId) {
+    closeSidebar();
     activeCharId = charId;
     activeTaskId = null;
 
